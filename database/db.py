@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from pathlib import Path
 
@@ -8,7 +9,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
-DB_PATH = BASE_DIR / "juggler.db"
+if os.getenv("CLOUD_MODE") == "1":
+    DB_PATH = Path("/app/data/juggler.db")
+else:
+    DB_PATH = BASE_DIR / "juggler.db"
 
 
 
