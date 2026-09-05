@@ -1,0 +1,29 @@
+﻿analysis,condition,state,n,target_hits,target_rate_pct,pattern,target_strong_hits,target_strong_rate_pct
+lag1 strong → 今回strong,lag1_strong,0.0,183,12.0,6.557377049180328,,,
+lag1 strong → 今回strong,lag1_strong,1.0,12,1.0,8.333333333333332,,,
+lag2 strong → 今回strong,lag2_strong,0.0,183,13.0,7.103825136612022,,,
+lag2 strong → 今回strong,lag2_strong,1.0,12,0.0,0.0,,,
+lag3 strong → 今回strong,lag3_strong,0.0,185,12.0,6.486486486486487,,,
+lag3 strong → 今回strong,lag3_strong,1.0,10,1.0,10.0,,,
+lag1 candidate → 今回strong,lag1_candidate,0.0,170,11.0,6.470588235294119,,,
+lag1 candidate → 今回strong,lag1_candidate,1.0,25,2.0,8.0,,,
+lag2 candidate → 今回strong,lag2_candidate,0.0,170,10.0,5.88235294117647,,,
+lag2 candidate → 今回strong,lag2_candidate,1.0,25,3.0,12.0,,,
+lag3 candidate → 今回strong,lag3_candidate,0.0,174,12.0,6.896551724137931,,,
+lag3 candidate → 今回strong,lag3_candidate,1.0,21,1.0,4.761904761904762,,,
+lag_pattern,,,163,,,"0,0,0",11.0,6.748466257668712
+lag_pattern,,,9,,,"0,0,1",1.0,11.11111111111111
+lag_pattern,,,10,,,"0,1,0",0.0,0.0
+lag_pattern,,,1,,,"0,1,1",0.0,0.0
+lag_pattern,,,11,,,"1,0,0",1.0,9.090909090909092
+lag_pattern,,,0,,,"1,0,1",0.0,
+lag_pattern,,,1,,,"1,1,0",0.0,0.0
+lag_pattern,,,0,,,"1,1,1",0.0,
+candidate_pattern,,,136,,,"0,0,0",7.0,5.147058823529411
+candidate_pattern,,,14,,,"0,0,1",1.0,7.142857142857142
+candidate_pattern,,,18,,,"0,1,0",3.0,16.666666666666664
+candidate_pattern,,,2,,,"0,1,1",0.0,0.0
+candidate_pattern,,,16,,,"1,0,0",2.0,12.5
+candidate_pattern,,,4,,,"1,0,1",0.0,0.0
+candidate_pattern,,,4,,,"1,1,0",0.0,0.0
+candidate_pattern,,,1,,,"1,1,1",0.0,0.0
