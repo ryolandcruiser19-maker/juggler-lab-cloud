@@ -1944,7 +1944,7 @@ try:
     _parts = urlsplit(_current_url)
     APP_URL = urlunsplit((_parts.scheme, _parts.netloc, _parts.path, "", ""))
 except Exception:
-    APP_URL = "http://localhost:8501/"
+    APP_URL = ""
 
 # --------------------------------------------------
 # HTML生成
