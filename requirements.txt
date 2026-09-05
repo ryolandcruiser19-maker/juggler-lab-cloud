@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+requests
+psutil
+beautifulsoup4
+openpyxl
+playwright==1.61.0
