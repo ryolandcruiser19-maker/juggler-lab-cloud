@@ -10,7 +10,9 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates \
+    curl \
+    ca-certificates \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -19,6 +21,9 @@ RUN playwright install --with-deps chromium
 
 COPY . .
 
-EXPOSE 8501
+RUN rm -f /etc/nginx/sites-enabled/default \
+    && cp /app/nginx.conf /etc/nginx/nginx.conf
 
-CMD ["sh", "-c", "streamlit run app_ui_v8.py --server.address=0.0.0.0 --server.port=${PORT:-8501}"]
+EXPOSE 8080
+
+CMD ["sh", "-c", "uvicorn sync_api:app --host 0.0.0.0 --port 8000 & streamlit run app_ui_v8.py --server.address=0.0.0.0 --server.port=8501 & nginx -g 'daemon off;'"]
