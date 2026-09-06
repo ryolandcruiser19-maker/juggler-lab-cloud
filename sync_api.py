@@ -15,7 +15,7 @@ class DailyData(BaseModel):
     BB: int
     RB: int
     G数: int
-    合成確率: float
+    合成確率: float | None
     評価: str
     信頼度補正: str
     イベント種別: str
