@@ -4,8 +4,14 @@ import requests
 CLOUD_SYNC_URL = "https://juggler-lab-cloud-production.up.railway.app/sync"
 DB_PATH = "database/juggler.db"
 
-TARGET_DATE = "2026-09-05"
+TARGET_DATE = None
 
+if TARGET_DATE is None:
+    conn = sqlite3.connect(DB_PATH)
+    TARGET_DATE = conn.execute(
+        "SELECT MAX(日付) FROM daily_data"
+    ).fetchone()[0]
+    conn.close()
 
 conn = sqlite3.connect(DB_PATH)
 conn.row_factory = sqlite3.Row
@@ -52,6 +58,8 @@ for row in rows:
 
     if response.status_code != 200:
         print("同期失敗:", data["台番号"], response.status_code, response.text)
-        break
+        raise RuntimeError(
+            f"クラウド同期失敗: 台番号 {data['台番号']}"
+        )
 
     print("同期成功:", data["台番号"])
