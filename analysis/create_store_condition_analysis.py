@@ -6,11 +6,7 @@ from datetime import datetime
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DB_PATH = (
-    BASE_DIR
-    / "database"
-    / "juggler.db"
-)
+DB_PATH = Path("/app/data/juggler.db") if __import__("os").getenv("CLOUD_MODE") == "1" else BASE_DIR / "database" / "juggler.db"
 
 
 
