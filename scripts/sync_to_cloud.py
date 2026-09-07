@@ -63,3 +63,5 @@ for row in rows:
         )
 
     print("同期成功:", data["台番号"])
+
+print("全台同期完了")
