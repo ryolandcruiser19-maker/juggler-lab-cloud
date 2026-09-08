@@ -65,3 +65,9 @@ for row in rows:
     print("同期成功:", data["台番号"])
 
 print("全台同期完了")
+
+response = requests.post(
+    CLOUD_SYNC_URL.replace("/sync", "/sync-complete"),
+    timeout=30,
+)
+print("同期完了通知:", response.status_code, response.text)
