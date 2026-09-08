@@ -72,3 +72,7 @@ def sync_data(data: DailyData):
         "date": data.日付,
         "machine_no": data.台番号,
     }
+
+@app.post("/sync-complete")
+def sync_complete():
+    return {"status": "received"}
