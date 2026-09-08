@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import sqlite3
+import subprocess
+import sys
 
 app = FastAPI()
 
@@ -75,4 +77,17 @@ def sync_data(data: DailyData):
 
 @app.post("/sync-complete")
 def sync_complete():
-    return {"status": "received"}
+    result = subprocess.run(
+        [sys.executable, "/app/analysis/run_daily_analysis.py"],
+        check=False,
+    )
+
+    if result.returncode != 0:
+        return {
+            "status": "error",
+            "returncode": result.returncode,
+        }
+
+    return {
+        "status": "analysis_completed",
+    }
