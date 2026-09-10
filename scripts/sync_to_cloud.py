@@ -70,4 +70,5 @@ response = requests.post(
     CLOUD_SYNC_URL.replace("/sync", "/sync-complete"),
     timeout=30,
 )
+
 print("同期完了通知:", response.status_code, response.text)
