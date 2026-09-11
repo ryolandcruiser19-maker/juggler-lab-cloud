@@ -1830,3 +1830,47 @@ if __name__ == "__main__":
     print(
         DB_PATH
     )
+
+    with get_connection() as conn:
+
+        realtime_df = pd.read_sql_query(
+            """
+            SELECT *
+            FROM raw_data
+            WHERE 取得種別 = 'REALTIME'
+              AND 取得日時 = (
+                  SELECT MAX(取得日時)
+                  FROM raw_data
+                  WHERE 取得種別 = 'REALTIME'
+              )
+            """,
+            conn
+        )
+
+    print(
+        f"リアルタイムデータ: {len(realtime_df)}件"
+    )
+
+    result = analyze_realtime(
+        realtime_df
+    )
+
+    print(
+        f"高設定候補: {len(result['data'])}台"
+    )
+
+    print(
+        f"移動おすすめ: {len(result['move'])}台"
+    )
+
+    print(
+        f"3台並び候補: {len(result['alignment'])}件"
+    )
+
+    print(
+        f"RB候補: {len(result['reg'])}台"
+    )
+
+    print(
+        f"全台系候補: {len(result['all_setting'])}件"
+    )
