@@ -1,5 +1,6 @@
 import sys
 import sqlite3
+import pandas as pd
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
