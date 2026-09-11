@@ -25,6 +25,24 @@ class DailyData(BaseModel):
     島: str
 
 
+class RealtimeData(BaseModel):
+    取得日時: str
+    日付: str
+    店舗: str
+    機種: str
+    台番号: int
+    BB: int
+    RB: int
+    G数: int
+    合成確率: float | None
+    最終ゲーム: int
+    BIG過去最高: int
+    作成日時: str
+    営業日: str
+    取得種別: str
+    取得回数: int
+
+
 @app.post("/sync")
 def sync_data(data: DailyData):
 
@@ -74,6 +92,64 @@ def sync_data(data: DailyData):
         "date": data.日付,
         "machine_no": data.台番号,
     }
+
+
+@app.post("/realtime-sync")
+def realtime_sync(data: list[RealtimeData]):
+
+    conn = sqlite3.connect(DB_PATH)
+
+    conn.executemany(
+        """
+        INSERT OR REPLACE INTO raw_data (
+            取得日時,
+            日付,
+            店舗,
+            機種,
+            台番号,
+            BB,
+            RB,
+            G数,
+            合成確率,
+            最終ゲーム,
+            BIG過去最高,
+            作成日時,
+            営業日,
+            取得種別,
+            取得回数
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                row.取得日時,
+                row.日付,
+                row.店舗,
+                row.機種,
+                row.台番号,
+                row.BB,
+                row.RB,
+                row.G数,
+                row.合成確率,
+                row.最終ゲーム,
+                row.BIG過去最高,
+                row.作成日時,
+                row.営業日,
+                row.取得種別,
+                row.取得回数,
+            )
+            for row in data
+        ],
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "ok",
+        "count": len(data),
+    }
+
 
 @app.post("/sync-complete")
 def sync_complete():
