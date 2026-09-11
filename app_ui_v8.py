@@ -1,4 +1,5 @@
 import sys
+import sqlite3
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
@@ -781,9 +782,23 @@ if st.button(
 
         try:
 
-            realtime_df = (
-                get_realtime_data()
-            )
+            with sqlite3.connect(
+                "/app/data/juggler.db"
+            ) as conn:
+
+                realtime_df = pd.read_sql_query(
+                    """
+                    SELECT *
+                    FROM raw_data
+                    WHERE 取得種別 = 'REALTIME'
+                      AND 取得日時 = (
+                          SELECT MAX(取得日時)
+                          FROM raw_data
+                          WHERE 取得種別 = 'REALTIME'
+                      )
+                    """,
+                    conn
+                )
 
             st.session_state[
                 "realtime_data"
