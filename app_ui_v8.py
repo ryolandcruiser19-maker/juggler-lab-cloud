@@ -1516,6 +1516,10 @@ if "realtime_data" in st.session_state:
         analysis_result["alignment"]
     )
 
+    move_df = (
+        analysis_result["move"]
+    )
+    
     all_setting_df = (
         analysis_result["all_setting"]
     )
@@ -1579,7 +1583,7 @@ if "realtime_data" in st.session_state:
     )
 
 
-    if not alignment_df.empty:
+    if not move_df.empty:
 
         alignment_columns = [
             "台番号",
@@ -1616,6 +1620,49 @@ if "realtime_data" in st.session_state:
             "現在、移動をおすすめできる台はありません。"
         )
 
+    # ==================================
+    # 3台並び候補
+    # ==================================
+
+    st.subheader(
+        "ALIGNMENT CANDIDATES / 3台並び候補"
+    )
+
+    if not alignment_df.empty:
+
+        alignment_columns = [
+            "台番号",
+            "機種",
+            "島",
+            "G数",
+            "合成",
+            "左右スコア",
+            "並び期待度",
+            "直近減点",
+            "信頼度",
+            "おすすめ度",
+            "理由",
+        ]
+
+        alignment_columns = [
+            column
+            for column in alignment_columns
+            if column in alignment_df.columns
+        ]
+
+        st.dataframe(
+            alignment_df[
+                alignment_columns
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.info(
+            "現在、3台並び候補はありません。"
+        )
 
     # ==================================
     # 全台系候補
