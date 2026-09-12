@@ -900,40 +900,44 @@ if check_machine_clicked or selected_from_map:
 
 
     # ----------------------------------
-    # セッション上の
-    # リアルタイムデータ
+    # DBから最新のリアルタイムデータ取得
     # ----------------------------------
-
-    realtime_df = (
-        st.session_state.get(
-            "realtime_data"
-        )
-    )
-
 
     realtime_status = None
 
+    try:
 
-    if (
-        realtime_df is not None
-        and not realtime_df.empty
-        and "台番号" in realtime_df.columns
-    ):
+        with sqlite3.connect(
+            "/app/data/juggler.db"
+        ) as conn:
 
-        matched = realtime_df[
-            realtime_df[
-                "台番号"
-            ].astype(str).str.zfill(4)
-            == machine_no
-        ]
-
-        if not matched.empty:
-
-            realtime_status = (
-                matched.iloc[0].to_dict()
+            realtime_df = pd.read_sql_query(
+                """
+                SELECT *
+                FROM raw_data
+                WHERE 取得種別 = 'REALTIME'
+                  AND 取得日時 = (
+                      SELECT MAX(取得日時)
+                      FROM raw_data
+                      WHERE 取得種別 = 'REALTIME'
+                  )
+                  AND CAST(台番号 AS TEXT) = ?
+                """,
+                conn,
+                params=(machine_no,),
             )
 
+        if not realtime_df.empty:
 
+            realtime_status = (
+                realtime_df.iloc[0].to_dict()
+            )
+
+    except Exception:
+
+        realtime_status = None
+
+    
     # ----------------------------------
     # DB側の情報
     # ----------------------------------
