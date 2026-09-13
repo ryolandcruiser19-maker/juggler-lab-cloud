@@ -21,6 +21,8 @@ RUN playwright install --with-deps chromium
 
 COPY . .
 
+RUN python scripts/inject_manifest.py
+
 RUN rm -f /etc/nginx/sites-enabled/default \
     && cp /app/nginx.conf /etc/nginx/nginx.conf
 
