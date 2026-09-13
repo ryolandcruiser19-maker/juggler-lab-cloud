@@ -921,10 +921,10 @@ if check_machine_clicked or selected_from_map:
                       FROM raw_data
                       WHERE 取得種別 = 'REALTIME'
                   )
-                  AND CAST(台番号 AS TEXT) = ?
+                  AND 台番号 = ?
                 """,
                 conn,
-                params=(machine_no,),
+                params=(machine_number,),
             )
 
         if not realtime_df.empty:
