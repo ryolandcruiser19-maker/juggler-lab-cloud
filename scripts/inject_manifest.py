@@ -2,8 +2,8 @@ import os
 import streamlit
 
 INJECT = (
-    '<link rel="manifest" href="/static/manifest.json">\n'
-    '<link rel="apple-touch-icon" href="/static/icon-192.png">\n'
+    '<link rel="manifest" href="/pwa-assets/manifest.json">\n'
+    '<link rel="apple-touch-icon" href="/pwa-assets/icon-192.png">\n'
     '<meta name="theme-color" content="#050b08">\n'
 )
 
