@@ -993,19 +993,19 @@ if check_machine_clicked or selected_from_map:
 
         status["BB"] = (
             realtime_status.get(
-                "BIG"
+                "BB"
             )
         )
 
         status["RB"] = (
             realtime_status.get(
-                "REG"
+                "RB"
             )
         )
 
         status["G数"] = (
             realtime_status.get(
-                "累計ゲーム"
+                "G数"
             )
         )
 
