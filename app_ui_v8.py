@@ -1058,7 +1058,7 @@ if check_machine_clicked or selected_from_map:
         )
 
         st.success(
-            "P's CUBEから取得した最新データを表示しています。"
+            "取得した最新データを表示しています。"
         )
 
         p_cube_time = (
@@ -1070,7 +1070,7 @@ if check_machine_clicked or selected_from_map:
         if p_cube_time:
 
             st.caption(
-                "P's CUBE更新時刻: "
+                "データ更新時刻: "
                 + p_cube_time
             )
 
