@@ -41,6 +41,7 @@ class RealtimeData(BaseModel):
     営業日: str
     取得種別: str
     取得回数: int
+    P_CUBE更新時刻: str | None
 
 
 @app.post("/sync")
@@ -116,9 +117,10 @@ def realtime_sync(data: list[RealtimeData]):
             作成日時,
             営業日,
             取得種別,
-            取得回数
+            取得回数,
+            P_CUBE更新時刻
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -137,6 +139,7 @@ def realtime_sync(data: list[RealtimeData]):
                 row.営業日,
                 row.取得種別,
                 row.取得回数,
+                row.P_CUBE更新時刻,
             )
             for row in data
         ],
