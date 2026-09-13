@@ -1021,6 +1021,12 @@ if check_machine_clicked or selected_from_map:
             )
         )
 
+        status["P_CUBE更新時刻"] = (
+            realtime_status.get(
+                "P_CUBE更新時刻"
+            )
+        )
+
 
         # ----------------------------------
         # 取得時刻
@@ -1055,13 +1061,17 @@ if check_machine_clicked or selected_from_map:
             "P's CUBEから取得した最新データを表示しています。"
         )
 
-        if realtime_time:
+        p_cube_time = (
+            status.get(
+                "P_CUBE更新時刻"
+            )
+        )
+
+        if p_cube_time:
 
             st.caption(
-                "リアルタイム取得時刻: "
-                + realtime_time.strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                "P's CUBE更新時刻: "
+                + p_cube_time
             )
 
 
@@ -1096,7 +1106,6 @@ if check_machine_clicked or selected_from_map:
                     "-"
                 )
             )
-
 
         st.subheader(
             "CURRENT DATA / 現在のデータ"
