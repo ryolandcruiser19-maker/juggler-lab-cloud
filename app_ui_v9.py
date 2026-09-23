@@ -66,9 +66,10 @@ st.set_page_config(
 # 仮データ（STEP 2のみ）
 # ==================================
 # TODO: STEP 3以降でDBの値に差し替える
+# 店舗名は引き続き固定値。データ更新時刻はget_home_updated_label()で
+# 本日raw_dataの最新取得日時から取得するため、ここでは持たない。
 
 STORE_NAME = "Hタワー店"
-UPDATED_AT = "11:17"
 
 
 # ==================================
@@ -998,6 +999,20 @@ a.tm-row:hover {
 /* 実際の台マップはcomponents.html側の独自CSS（build_heatmap_html内）で完結しているため、
    ここでは凡例・見出し表示に使うpd-*クラスのみ流用している */
 
+/* ---------- BACKボタンの位置統一（v9で追加） ---------- */
+/* 変更禁止の.lab-back（見た目）自体は触らず、位置だけ画面右上に固定する。
+   ページの長さやスクロール位置に関係なく、常に同じ場所からすぐ押せるように
+   するため（マップ画面など縦に長いページでの押しにくさの解消もこれで兼ねる）。 */
+.lab-back {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+    right: 14px;
+    z-index: 500;
+    margin-top: 0;
+    background: rgba(4,14,13,.88);
+    backdrop-filter: blur(6px);
+}
+
 /* ---------- スマホ ---------- */
 @media (max-width: 700px) {
     .module-card {
@@ -1016,6 +1031,21 @@ a.tm-row:hover {
 
     .lab-bar {
         margin-bottom: 16px;
+    }
+
+    .lab-back {
+        top: calc(env(safe-area-inset-top, 0px) + 8px);
+        right: 8px;
+        padding: 6px 12px;
+        font-size: .62rem;
+    }
+
+    /* BACKボタンを固定表示にした分、スマホ幅ではページ先頭のカードが
+       ボタンの下に隠れないよう少し余白を空ける */
+    .rt-wrap,
+    .pd-wrap,
+    .lab-soon {
+        margin-top: 40px;
     }
 }
 
@@ -1583,6 +1613,26 @@ def render_grape_form(machine_no):
     if cleared:
         _clear_grape_input(machine_no)
         st.rerun()
+
+
+def get_home_updated_label():
+    """
+    HOME画面の「データ更新」表示用。
+    本日のraw_data（全台）の中で一番新しい取得日時のHH:MMを返す。
+    今日分がまだ無ければ「-」を返す。
+    """
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    row = fetch_one(
+        "SELECT MAX(取得日時) AS max_dt FROM raw_data WHERE 日付 = ?",
+        [today],
+    )
+    max_dt = row["max_dt"] if row and row["max_dt"] else None
+    if not max_dt:
+        return "-"
+    try:
+        return str(max_dt).split(" ")[1][:5]
+    except IndexError:
+        return str(max_dt)
 
 
 def _fmt_int(val):
@@ -2686,6 +2736,6 @@ elif page in MODULES:
     st.markdown(SOON_HTML.format(en=en, jp=jp), unsafe_allow_html=True)
 else:
     st.markdown(
-        HOME_HTML.format(store=STORE_NAME, updated=UPDATED_AT),
+        HOME_HTML.format(store=STORE_NAME, updated=get_home_updated_label()),
         unsafe_allow_html=True,
     )
