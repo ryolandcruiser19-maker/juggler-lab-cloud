@@ -18,6 +18,7 @@
 """
 
 from pathlib import Path
+import sys
 import sqlite3
 
 import pandas as pd
@@ -1814,6 +1815,138 @@ def analyze_realtime(
 
         "move": move
 
+    }
+
+
+# ==================================================
+# 新ロジック接続（setting_estimation.py）
+# ==================================================
+# 既存の analyze_realtime（◎○△の旧スコアロジック）は変更しない。
+# こちらは別関数として追加し、動作確認できてから
+# app_ui_v9.py側の呼び先を切り替えるかどうかを別途判断する。
+#
+# setting_estimation.py / juggler_specs.py は core/ フォルダにあり、
+# scripts/realtime とは別のフォルダなので、
+# app_ui_v9.pyが scripts/realtime を sys.path に追加しているのと同じやり方で
+# core も sys.path に追加する。
+
+CORE_DIR = BASE_DIR / "core"
+if str(CORE_DIR) not in sys.path:
+    sys.path.insert(0, str(CORE_DIR))
+
+from setting_estimation import (
+    analyze_machine,
+    build_move_candidates,
+    get_high_setting_score,
+)
+from juggler_specs import JUGGLER_SPECS
+
+# raw_data側の機種表記ゆれ → JUGGLER_SPECSの正式キーへの変換
+# （P's CUBE取り込み時の文字が juggler_specs.py の表記と異なるケースがあるため）
+MACHINE_NAME_ALIASES = {
+    "ハッピージャグラーVIII": "ハッピージャグラーVⅢ",
+}
+
+
+def _normalize_machine_name(name):
+    return MACHINE_NAME_ALIASES.get(name, name)
+
+
+def analyze_realtime_v2(realtime_df):
+    """
+    setting_estimation.py（ベイズ推定ベースのSETTING POSSIBILITY／
+    DATA CONFIDENCE／MOVE候補ロジック）を使った新しいリアルタイム分析。
+    """
+
+    if realtime_df is None or realtime_df.empty:
+        return {"data": [], "move": [], "unsupported_machines": []}
+
+    df = prepare_realtime_data(realtime_df)
+
+    # ------------------------------------------
+    # machine_records（setting_estimation.py用）を組み立てる
+    # ------------------------------------------
+
+    records = []
+    for _, row in df.iterrows():
+        no = row.get("台番号数値")
+        machine = row.get("機種")
+        games = row.get("G数")
+        bb = row.get("BIG数")
+        rb = row.get("REG数")
+        island = row.get("島")
+
+        if pd.isna(no) or pd.isna(machine) or pd.isna(games):
+            continue
+
+        if pd.isna(bb):
+            bb = 0
+        if pd.isna(rb):
+            rb = 0
+
+        records.append({
+            "id": int(no),
+            "machine": _normalize_machine_name(str(machine)),
+            "island": str(island) if pd.notna(island) else None,
+            "G": int(games),
+            "bb": int(bb),
+            "rb": int(rb),
+        })
+
+    # ------------------------------------------
+    # 隣接台（left_id/right_id）
+    # 同じ島の中で台番号±1のみを隣接とみなす
+    # ------------------------------------------
+
+    number_to_id_by_island = {}
+    for rec in records:
+        number_to_id_by_island.setdefault(rec["island"], {})[rec["id"]] = rec["id"]
+
+    for rec in records:
+        mapping = number_to_id_by_island.get(rec["island"], {})
+        rec["left_id"] = mapping.get(rec["id"] - 1)
+        rec["right_id"] = mapping.get(rec["id"] + 1)
+
+    # ------------------------------------------
+    # JUGGLER_SPECSに登録がある機種だけを対象にする
+    # ------------------------------------------
+
+    supported_records = [rec for rec in records if rec["machine"] in JUGGLER_SPECS]
+    unsupported = sorted({
+        rec["machine"] for rec in records if rec["machine"] not in JUGGLER_SPECS
+    })
+
+    if not supported_records:
+        return {"data": [], "move": [], "unsupported_machines": unsupported}
+
+    # ------------------------------------------
+    # 台単体のSETTING POSSIBILITY
+    # ------------------------------------------
+
+    data_results = []
+    for rec in supported_records:
+        result = analyze_machine(rec["machine"], rec["G"], rec["bb"], rec["rb"])
+        result["id"] = rec["id"]
+        result["island"] = rec["island"]
+        data_results.append(result)
+
+    data_results.sort(
+        key=lambda r: get_high_setting_score(r["setting_possibility"]),
+        reverse=True,
+    )
+
+    # ------------------------------------------
+    # MOVE候補
+    # ------------------------------------------
+
+    move_candidates = build_move_candidates(
+        supported_records, top_n=len(supported_records)
+    )
+
+    return {
+        "data": data_results,
+        "move": move_candidates,
+        "unsupported_machines": unsupported,
     }
 
 
