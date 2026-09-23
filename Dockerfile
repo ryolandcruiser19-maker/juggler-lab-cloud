@@ -28,4 +28,4 @@ RUN rm -f /etc/nginx/sites-enabled/default \
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "uvicorn sync_api:app --host 0.0.0.0 --port 8000 & streamlit run app_ui_v8.py --server.address=0.0.0.0 --server.port=8501 & nginx -g 'daemon off;'"]
+CMD ["sh", "-c", "uvicorn sync_api:app --host 0.0.0.0 --port 8000 & streamlit run app_ui_v9.py --server.address=0.0.0.0 --server.port=8501 & nginx -g 'daemon off;'"]
