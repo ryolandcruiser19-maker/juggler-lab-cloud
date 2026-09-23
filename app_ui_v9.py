@@ -999,20 +999,6 @@ a.tm-row:hover {
 /* 実際の台マップはcomponents.html側の独自CSS（build_heatmap_html内）で完結しているため、
    ここでは凡例・見出し表示に使うpd-*クラスのみ流用している */
 
-/* ---------- BACKボタンの位置統一（v9で追加） ---------- */
-/* 変更禁止の.lab-back（見た目）自体は触らず、位置だけ画面右上に固定する。
-   ページの長さやスクロール位置に関係なく、常に同じ場所からすぐ押せるように
-   するため（マップ画面など縦に長いページでの押しにくさの解消もこれで兼ねる）。 */
-.lab-back {
-    position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 14px);
-    right: 14px;
-    z-index: 500;
-    margin-top: 0;
-    background: rgba(4,14,13,.88);
-    backdrop-filter: blur(6px);
-}
-
 /* ---------- スマホ ---------- */
 @media (max-width: 700px) {
     .module-card {
@@ -1031,21 +1017,6 @@ a.tm-row:hover {
 
     .lab-bar {
         margin-bottom: 16px;
-    }
-
-    .lab-back {
-        top: calc(env(safe-area-inset-top, 0px) + 8px);
-        right: 8px;
-        padding: 6px 12px;
-        font-size: .62rem;
-    }
-
-    /* BACKボタンを固定表示にした分、スマホ幅ではページ先頭のカードが
-       ボタンの下に隠れないよう少し余白を空ける */
-    .rt-wrap,
-    .pd-wrap,
-    .lab-soon {
-        margin-top: 40px;
     }
 }
 
@@ -1273,6 +1244,8 @@ RT_HTML = """
 <span class="rt-head-no">No.{no}</span>
 </div>
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 <div class="rt-model">{model}</div>
 
 <div class="rt-grid">
@@ -1302,8 +1275,6 @@ RT_HTML = """
 <div class="rt-updated">\u30c7\u30fc\u30bf\u66f4\u65b0 {updated}</div>
 
 <a class="lab-map-link" href="?page=heatmap&from=realtime" target="_self">\U0001F5FA \u30d5\u30ed\u30a2\u3067\u898b\u308b</a>
-
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1378,6 +1349,8 @@ PD_HTML_HEAD = """
 <span class="pd-head-no">No.{no}</span>
 </div>
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 <div class="pd-model">{model}</div>
 <div class="pd-range">{range_start} \u301c {range_end}</div>
 
@@ -1412,8 +1385,6 @@ PD_MAP_LINK_HTML = (
 
 PD_HTML_TAIL = """
 </div>
-
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1464,6 +1435,8 @@ TM_HTML_HEAD = """
 <span class="pd-head-no">{date}</span>
 </div>
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 <div class="pd-model">\u660e\u65e5\u306e\u4e88\u60f3\u53f0</div>
 
 <div class="pd-table">
@@ -1480,8 +1453,6 @@ TM_HTML_TAIL = """
 
 <a class="lab-map-link" href="?page=heatmap&from=tomorrow" target="_self">\U0001F5FA \u30d5\u30ed\u30a2\u3067\u898b\u308b</a>
 
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
-
 </div>
 """
 
@@ -1492,6 +1463,8 @@ TM_DETAIL_HTML = """
 <span class="rt-head-label">TOMORROW</span>
 <span class="rt-head-no">No.{no}</span>
 </div>
+
+<a class="lab-back" href="?page=tomorrow" target="_self">&#8592; \u4e00\u89a7\u306b\u623b\u308b</a>
 
 <div class="rt-model">{model}</div>
 
@@ -1504,8 +1477,6 @@ TM_DETAIL_HTML = """
 </div>
 
 <div class="rt-updated">{date} \u306e\u4e88\u60f3</div>
-
-<a class="lab-back" href="?page=tomorrow" target="_self">&#8592; \u4e00\u89a7\u306b\u623b\u308b</a>
 
 </div>
 """
@@ -1618,7 +1589,7 @@ def render_grape_form(machine_no):
 def get_home_updated_label():
     """
     HOME画面の「データ更新」表示用。
-    本日のraw_data（全台）の中で一番新しい取得日時のHH:MMを返す。
+    本日のraw_data（全台）の中で一番新しい取得日時の「YYYY/M/D HH:MM」を返す。
     今日分がまだ無ければ「-」を返す。
     """
     today = datetime.date.today().strftime("%Y-%m-%d")
@@ -1630,8 +1601,10 @@ def get_home_updated_label():
     if not max_dt:
         return "-"
     try:
-        return str(max_dt).split(" ")[1][:5]
-    except IndexError:
+        date_part, time_part = str(max_dt).split(" ")
+        y, m, d = date_part.split("-")
+        return f"{y}/{int(m)}/{int(d)} {time_part[:5]}"
+    except (IndexError, ValueError):
         return str(max_dt)
 
 
@@ -1837,6 +1810,8 @@ MV_HTML_HEAD = """
 <span class="pd-head-label">MOVE</span>
 <span class="pd-head-no">{date}</span>
 </div>
+
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 """
 
 MV_SECTION_MOVE_HEAD = """
@@ -1851,8 +1826,6 @@ MV_SECTION_MOVE_TAIL = """
 
 MV_HTML_TAIL = """
 <a class="lab-map-link" href="?page=heatmap&from=move&mp={mp}" target="_self">🗺 フロアで見る</a>
-
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1873,6 +1846,8 @@ MV_DETAIL_HTML = """
 <span class="rt-head-label">MOVE</span>
 <span class="rt-head-no">No.{no}</span>
 </div>
+
+<a class="lab-back" href="?page=move" target="_self">&#8592; 一覧に戻る</a>
 
 <div class="rt-model">{model}</div>
 
@@ -1901,8 +1876,6 @@ MV_DETAIL_HTML = """
 </div>
 
 <div class="rt-updated">{date} 時点</div>
-
-<a class="lab-back" href="?page=move" target="_self">&#8592; 一覧に戻る</a>
 
 </div>
 """
@@ -2712,6 +2685,7 @@ elif page == "heatmap":
         f'<span class="pd-head-label">HEATMAP</span>'
         f'<span class="pd-head-no">{date_label}</span>'
         f'</div>'
+        f'<a class="lab-back" href="?page={back_to}" target="_self">&#8592; 戻る</a>'
         f'<div class="pd-model">MACHINE MAP / 台マップ（タップすると{tap_hint}に移動）</div>'
         f'{nav_html}'
         f'</div>',
@@ -2724,12 +2698,6 @@ elif page == "heatmap":
     components.html(
         build_heatmap_html(seat_colors, legend_items, link_page),
         height=760, scrolling=False,
-    )
-    st.markdown(
-        f'<div class="pd-wrap">'
-        f'<a class="lab-back" href="?page={back_to}" target="_self">&#8592; 戻る</a>'
-        f'</div>',
-        unsafe_allow_html=True,
     )
 elif page in MODULES:
     en, jp = MODULES[page]
