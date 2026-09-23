@@ -1569,7 +1569,7 @@ def render_grape_form(machine_no):
     with st.form(f"grape_form_{machine_no}"):
         grape_G = st.number_input("ぶどうを数えたG数", min_value=0, value=int(cur_G), step=100)
         grape_n = st.number_input("ぶどう回数", min_value=0, value=int(cur_n), step=1)
-        # st.columnsは狭い画面（スマホ）で縦積みになるため使わない（既存ルール）。
+        # st.columnsは狭い画面で縦積みになるため使わない（プロジェクトのCSSルールと同じ方針）。
         # ボタンはそのまま縦に並べる。
         submitted = st.form_submit_button("反映")
         cleared = st.form_submit_button("クリア")
