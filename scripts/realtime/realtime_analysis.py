@@ -30,7 +30,7 @@ import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
-DB_PATH = Path("/app/data/juggler.db")
+DB_PATH = BASE_DIR / "database" / "juggler.db"
 
 
 # ==================================================
@@ -1837,9 +1837,29 @@ if str(CORE_DIR) not in sys.path:
 from setting_estimation import (
     analyze_machine,
     build_move_candidates,
+    build_expected_diff_ranking,
     get_high_setting_score,
 )
 from juggler_specs import JUGGLER_SPECS
+
+import datetime as dt
+
+# 残り営業時間の算出に使う実質的な閉店時刻と回転ペース
+# （ユーザー確認済み：閉店は23時だが実質的な稼働限界は22:30）
+CLOSING_TIME = dt.time(22, 30)
+EXPECTED_DIFF_SPINS_PER_HOUR = 600
+
+
+def _remaining_games(now=None, closing_time=CLOSING_TIME,
+                      spins_per_hour=EXPECTED_DIFF_SPINS_PER_HOUR):
+    """
+    現在時刻から閉店までの残り時間を、想定回転数（一日の営業を前提）に換算する。
+    閉店時刻をすでに過ぎていれば（0以下にならないよう）0を返す。
+    """
+    now = now or dt.datetime.now()
+    closing_dt = dt.datetime.combine(now.date(), closing_time)
+    remaining_hours = max((closing_dt - now).total_seconds(), 0) / 3600
+    return remaining_hours * spins_per_hour
 
 # raw_data側の機種表記ゆれ → JUGGLER_SPECSの正式キーへの変換
 # （P's CUBE取り込み時の文字が juggler_specs.py の表記と異なるケースがあるため）
@@ -1943,9 +1963,31 @@ def analyze_realtime_v2(realtime_df):
         supported_records, top_n=len(supported_records)
     )
 
+    # ------------------------------------------
+    # 期待枚数ランキング
+    # （最も可能性が高い設定×残り営業時間×600回転/時での期待差枚数、枚単位）
+    # priority_score（%ベース）とは単位が違うため、別アウトプットとして提供する
+    # ------------------------------------------
+
+    remaining_games = _remaining_games()
+    expected_diff_ranking = build_expected_diff_ranking(
+        supported_records, remaining_games, top_n=None
+    )
+
+    # ------------------------------------------
+    # 3並び疑いの台（narabi_suspicion=Trueのみ）
+    # ------------------------------------------
+
+    narabi_candidates = [
+        r for r in move_candidates if r["narabi_suspicion"]
+    ]
+
     return {
         "data": data_results,
         "move": move_candidates,
+        "expected_diff_ranking": expected_diff_ranking,
+        "narabi_candidates": narabi_candidates,
+        "remaining_games": remaining_games,
         "unsupported_machines": unsupported,
     }
 
@@ -1962,48 +2004,4 @@ if __name__ == "__main__":
 
     print(
         DB_PATH
-    )
-
-    with get_connection() as conn:
-
-        realtime_df = pd.read_sql_query(
-            """
-            SELECT *
-            FROM raw_data
-            WHERE 取得種別 = 'REALTIME'
-              AND 取得日時 = (
-                  SELECT MAX(取得日時)
-                  FROM raw_data
-                  WHERE 取得種別 = 'REALTIME'
-              )
-            """,
-            conn
-        )
-
-    print(
-        f"リアルタイムデータ: {len(realtime_df)}件"
-    )
-
-    result = analyze_realtime(
-        realtime_df
-    )
-
-    print(
-        f"高設定候補: {len(result['data'])}台"
-    )
-
-    print(
-        f"移動おすすめ: {len(result['move'])}台"
-    )
-
-    print(
-        f"3台並び候補: {len(result['alignment'])}件"
-    )
-
-    print(
-        f"RB候補: {len(result['reg'])}台"
-    )
-
-    print(
-        f"全台系候補: {len(result['all_setting'])}件"
     )
