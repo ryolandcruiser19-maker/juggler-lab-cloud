@@ -128,9 +128,55 @@ def analyze_machine(machine_name, G, bb, rb, grape_G=None, grape_n=None):
         "grape_prob": grape_prob,  # ぶどう確率（未入力ならNone）
         "setting_possibility": possibility,   # {設定: %}
         "data_confidence": confidence,        # LOW/MEDIUM/HIGH
-        "spec": spec,                         # {設定: {"bb":理論分母, "rb":理論分母, "grape":理論分母}}
+        "most_likely_setting": get_most_likely_setting(possibility),  # 最も可能性が高い設定番号
+        "spec": spec,                         # {設定: {"bb":理論分母, "rb":理論分母, "grape":理論分母, "diff_per_hour":理論差枚/時}}
                                                # ＝可能性%の根拠（理論値）。画面側で
                                                # 「実際のBB/RB確率」と並べて表示する想定
+    }
+
+
+def get_most_likely_setting(possibility):
+    """
+    SETTING POSSIBILITY（{設定: 可能性%}）の中で、最も可能性が高い設定番号を返す。
+    複数設定が同率トップの場合は、辞書の並び順（設定1→6）で最初に出てきたものを返す。
+    """
+    return max(possibility, key=possibility.get)
+
+
+def estimate_expected_diff(setting_possibility, spec, remaining_games, base_spins_per_hour=850):
+    """
+    SETTING POSSIBILITY（{設定: 可能性%}）で加重平均した、
+    残りゲーム数ぶんの期待差枚数を返す。
+
+    setting_possibility: get_setting_possibility()の戻り値
+    spec: analyze_machine()が返すspec（{設定: {..., "diff_per_hour": 理論差枚/時}}）
+    remaining_games: 残りの見込みゲーム数（呼び出し側で「閉店までの時間×回転数/時」等から算出）
+    base_spins_per_hour: diff_per_hourの算出基準回転数（出典サイト準拠、850回転/時固定）
+
+    「最も可能性が高い設定」だけを使う方式だと、同じ機種で最有力設定さえ一致すれば
+    BB/RBの偏りが違っても同じ期待差枚になってしまう（区別できない）ため、
+    setting_possibilityそのもので加重平均することで、BB/RBの偏りの違いが
+    自然に反映されるようにしている。
+    """
+    return sum(
+        (setting_possibility[s] / 100)
+        * (spec[s]["diff_per_hour"] / base_spins_per_hour)
+        * remaining_games
+        for s in range(1, 7)
+    )
+
+
+def get_diff_per_setting(spec, remaining_games, base_spins_per_hour=850):
+    """
+    設定1〜6それぞれを仮定した場合の期待差枚数（理論値）を、設定ごとに返す。
+    画面側でSETTING POSSIBILITY（可能性%）と並べて表示し、
+    プレイヤー自身が中身を判断できるようにする用途。
+    """
+    return {
+        s: round(
+            (spec[s]["diff_per_hour"] / base_spins_per_hour) * remaining_games, 1
+        )
+        for s in range(1, 7)
     }
 
 
@@ -284,6 +330,51 @@ def build_move_candidates(machine_records, top_n=10):
 
     candidates.sort(key=lambda r: r["priority_score"], reverse=True)
     return candidates[:top_n]
+
+
+# ==================================
+# 期待枚数ランキング
+# ==================================
+# 方針（引き継ぎ資料より）：
+# - narabi_suspicionを含むpriority_score（%ベース）とは単位が違うため、
+#   1本のランキングに混ぜず、独立したアウトプットとして提供する
+# - 各台の「最も可能性が高い設定」を仮定し、その設定のdiff_per_hour（差枚/時、
+#   850回転基準）から、残り営業時間ぶんの期待差枚数（枚）を算出してランキングする
+# ==================================
+
+def build_expected_diff_ranking(machine_records, remaining_games, top_n=None):
+    """
+    machine_records: build_move_candidatesと同じ形式の入力
+    remaining_games: 残りの見込みゲーム数（呼び出し側で算出して渡す）
+    top_n: Noneなら全件、指定すれば上位N件のみ返す
+
+    戻り値: expected_diff（期待差枚数、枚）で降順ソートしたリスト。
+            各要素はanalyze_machine()の結果に
+            expected_diff（期待差枚数）を追加したもの。
+    """
+    results = []
+    for rec in machine_records:
+        result = analyze_machine(
+            rec["machine"], rec["G"], rec["bb"], rec["rb"],
+            rec.get("grape_G"), rec.get("grape_n"),
+        )
+        result["id"] = rec["id"]
+
+        expected_diff = estimate_expected_diff(
+            result["setting_possibility"], result["spec"], remaining_games
+        )
+        result["expected_diff"] = round(expected_diff, 1)
+        # 設定1〜6それぞれを仮定した場合の期待差枚数（理論値）。
+        # 画面側でSETTING POSSIBILITYと並べて表示する用途。
+        result["expected_diff_by_setting"] = get_diff_per_setting(
+            result["spec"], remaining_games
+        )
+        results.append(result)
+
+    results.sort(key=lambda r: r["expected_diff"], reverse=True)
+    if top_n is not None:
+        results = results[:top_n]
+    return results
 
 
 if __name__ == "__main__":
