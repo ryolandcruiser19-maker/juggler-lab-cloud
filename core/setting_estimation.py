@@ -335,30 +335,33 @@ def build_move_candidates(machine_records, top_n=10):
 # ==================================
 # 期待枚数ランキング
 # ==================================
-# 方針（引き継ぎ資料より）：
+# 方針：
 # - narabi_suspicionを含むpriority_score（%ベース）とは単位が違うため、
 #   1本のランキングに混ぜず、独立したアウトプットとして提供する
-# - 各台の「最も可能性が高い設定」を仮定し、その設定のdiff_per_hour（差枚/時、
-#   850回転基準）から、残り営業時間ぶんの期待差枚数（枚）を算出してランキングする
+# - build_move_candidates()の結果（analyze_machineの中身＋own_score／
+#   narabi_suspicion／priority_score／隣接id）をそのまま入力に取り、
+#   analyze_machineを二重に呼ばずにexpected_diffだけを追加する
+#   （＝どちらのアウトプットから見ても、同じ台なら詳細ページの中身が一致する）
+# - setting_possibilityで加重平均した期待差枚数を使う（BB/RBの偏りが
+#   最有力設定1本の場合より正しく反映されるため。詳細はスレッド参照）
 # ==================================
 
-def build_expected_diff_ranking(machine_records, remaining_games, top_n=None):
+def build_expected_diff_ranking(analyzed_candidates, remaining_games, top_n=None):
     """
-    machine_records: build_move_candidatesと同じ形式の入力
+    analyzed_candidates: build_move_candidates()の戻り値
+                         （各要素はanalyze_machineの結果＋
+                          id/left_id/right_id/own_score/narabi_suspicion/priority_score）
     remaining_games: 残りの見込みゲーム数（呼び出し側で算出して渡す）
     top_n: Noneなら全件、指定すれば上位N件のみ返す
 
-    戻り値: expected_diff（期待差枚数、枚）で降順ソートしたリスト。
-            各要素はanalyze_machine()の結果に
-            expected_diff（期待差枚数）を追加したもの。
+    戻り値: expected_diff（期待差枚数、枚）で降順ソートしたリスト
+            （元のanalyzed_candidatesの各要素はコピーして使うため、呼び出し側の
+             リストは書き換えない）。各要素にexpected_diff・expected_diff_by_setting
+             （設定1〜6それぞれを仮定した場合の理論値）を追加している。
     """
     results = []
-    for rec in machine_records:
-        result = analyze_machine(
-            rec["machine"], rec["G"], rec["bb"], rec["rb"],
-            rec.get("grape_G"), rec.get("grape_n"),
-        )
-        result["id"] = rec["id"]
+    for candidate in analyzed_candidates:
+        result = dict(candidate)
 
         expected_diff = estimate_expected_diff(
             result["setting_possibility"], result["spec"], remaining_games
@@ -375,6 +378,14 @@ def build_expected_diff_ranking(machine_records, remaining_games, top_n=None):
     if top_n is not None:
         results = results[:top_n]
     return results
+
+
+def get_narabi_candidates(analyzed_candidates):
+    """
+    build_move_candidates()の戻り値から、narabi_suspicion=Trueの台だけを抜き出す。
+    元の並び順（priority_score順）はそのまま維持する。
+    """
+    return [c for c in analyzed_candidates if c.get("narabi_suspicion")]
 
 
 if __name__ == "__main__":
