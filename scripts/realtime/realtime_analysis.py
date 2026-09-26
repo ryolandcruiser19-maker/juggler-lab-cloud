@@ -1838,6 +1838,7 @@ from setting_estimation import (
     analyze_machine,
     build_move_candidates,
     build_expected_diff_ranking,
+    get_narabi_candidates,
     get_high_setting_score,
 )
 from juggler_specs import JUGGLER_SPECS
@@ -1971,16 +1972,14 @@ def analyze_realtime_v2(realtime_df):
 
     remaining_games = _remaining_games()
     expected_diff_ranking = build_expected_diff_ranking(
-        supported_records, remaining_games, top_n=None
+        move_candidates, remaining_games, top_n=None
     )
 
     # ------------------------------------------
     # 3並び疑いの台（narabi_suspicion=Trueのみ）
     # ------------------------------------------
 
-    narabi_candidates = [
-        r for r in move_candidates if r["narabi_suspicion"]
-    ]
+    narabi_candidates = get_narabi_candidates(move_candidates)
 
     return {
         "data": data_results,
