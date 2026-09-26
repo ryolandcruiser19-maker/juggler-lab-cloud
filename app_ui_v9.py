@@ -1121,9 +1121,9 @@ MODULES = {
 
 SOON_HTML = """
 <div class="lab-soon">
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 <div class="lab-soon-en">{en}</div>
 <div class="lab-soon-note">{jp} / UNDER CONSTRUCTION</div>
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 </div>
 """
 
@@ -1255,6 +1255,8 @@ def load_realtime_machine(machine_no):
 RT_HTML = """
 <div class="rt-wrap">
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 <div class="rt-head">
 <span class="rt-head-label">MACHINE</span>
 <span class="rt-head-no">No.{no}</span>
@@ -1293,8 +1295,6 @@ RT_HTML = """
 <div class="rt-updated">\u30c7\u30fc\u30bf\u66f4\u65b0 {updated}</div>
 
 <a class="lab-map-link" href="?page=heatmap&from=realtime" target="_self">\U0001F5FA \u30d5\u30ed\u30a2\u3067\u898b\u308b</a>
-
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1364,6 +1364,8 @@ PD_ROW_HTML = """
 PD_HTML_HEAD = """
 <div class="pd-wrap">
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 <div class="pd-head">
 <span class="pd-head-label">PAST DATA</span>
 <span class="pd-head-no">No.{no}</span>
@@ -1403,8 +1405,6 @@ PD_MAP_LINK_HTML = (
 
 PD_HTML_TAIL = """
 </div>
-
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1450,6 +1450,8 @@ TM_ROW_HTML = """
 TM_HTML_HEAD = """
 <div class="pd-wrap">
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 <div class="pd-head">
 <span class="pd-head-label">TOMORROW</span>
 <span class="pd-head-no">{date}</span>
@@ -1471,13 +1473,13 @@ TM_HTML_TAIL = """
 
 <a class="lab-map-link" href="?page=heatmap&from=tomorrow" target="_self">\U0001F5FA \u30d5\u30ed\u30a2\u3067\u898b\u308b</a>
 
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
-
 </div>
 """
 
 TM_DETAIL_HTML = """
 <div class="rt-wrap">
+
+<a class="lab-back" href="?page=tomorrow" target="_self">&#8592; \u4e00\u89a7\u306b\u623b\u308b</a>
 
 <div class="rt-head">
 <span class="rt-head-label">TOMORROW</span>
@@ -1495,9 +1497,6 @@ TM_DETAIL_HTML = """
 </div>
 
 <div class="rt-updated">{date} \u306e\u4e88\u60f3</div>
-
-<a class="lab-back" href="?page=tomorrow" target="_self">&#8592; \u4e00\u89a7\u306b\u623b\u308b</a>
-
 </div>
 """
 
@@ -1837,6 +1836,8 @@ def build_move_nav_html(param_name, current_page, total_items, other_param_name=
 MV_HTML_HEAD = """
 <div class="pd-wrap">
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 <div class="pd-head">
 <span class="pd-head-label">MOVE</span>
 <span class="pd-head-no">{date}</span>
@@ -1866,8 +1867,6 @@ MV_SECTION_NARABI_TAIL = """
 MV_HTML_TAIL = """
 <a class="lab-map-link" href="?page=heatmap&from=move&mp={mp}" target="_self">🗺 フロアで見る</a>
 
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
-
 </div>
 """
 
@@ -1883,6 +1882,8 @@ MV_SETTING_ROW_HTML = """
 
 MV_DETAIL_HTML = """
 <div class="rt-wrap">
+
+<a class="lab-back" href="?page=move" target="_self">&#8592; 一覧に戻る</a>
 
 <div class="rt-head">
 <span class="rt-head-label">MOVE</span>
@@ -1920,8 +1921,6 @@ MV_DETAIL_HTML = """
 </div>
 
 <div class="rt-updated">{date} 時点</div>
-
-<a class="lab-back" href="?page=move" target="_self">&#8592; 一覧に戻る</a>
 
 </div>
 """
@@ -2734,6 +2733,7 @@ elif page == "heatmap":
 
     st.markdown(
         f'<div class="pd-wrap">'
+        f'<a class="lab-back" href="?page={back_to}" target="_self">&#8592; 戻る</a>'
         f'<div class="pd-head">'
         f'<span class="pd-head-label">HEATMAP</span>'
         f'<span class="pd-head-no">{date_label}</span>'
@@ -2750,12 +2750,6 @@ elif page == "heatmap":
     components.html(
         build_heatmap_html(seat_colors, legend_items, link_page),
         height=760, scrolling=False,
-    )
-    st.markdown(
-        f'<div class="pd-wrap">'
-        f'<a class="lab-back" href="?page={back_to}" target="_self">&#8592; 戻る</a>'
-        f'</div>',
-        unsafe_allow_html=True,
     )
 elif page in MODULES:
     en, jp = MODULES[page]
