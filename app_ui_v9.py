@@ -41,6 +41,7 @@ from realtime_analysis import (
     prepare_realtime_data,
     calculate_current_evaluation,
     analyze_realtime_v2,
+    _remaining_games,
 )
 
 # ぶどう入力機能で、台単体の再計算（analyze_machine等）に直接アクセスするため、
@@ -49,7 +50,13 @@ CORE_DIR = BASE_DIR / "core"
 if str(CORE_DIR) not in sys.path:
     sys.path.insert(0, str(CORE_DIR))
 
-from setting_estimation import analyze_machine, check_narabi_suspicion, get_high_setting_score
+from setting_estimation import (
+    analyze_machine,
+    check_narabi_suspicion,
+    get_high_setting_score,
+    estimate_expected_diff,
+    get_diff_per_setting,
+)
 
 # ==================================
 # ページ設定
@@ -66,10 +73,9 @@ st.set_page_config(
 # 仮データ（STEP 2のみ）
 # ==================================
 # TODO: STEP 3以降でDBの値に差し替える
-# 店舗名は引き続き固定値。データ更新時刻はget_home_updated_label()で
-# 本日raw_dataの最新取得日時から取得するため、ここでは持たない。
 
 STORE_NAME = "Hタワー店"
+UPDATED_AT = "11:17"
 
 
 # ==================================
@@ -917,6 +923,16 @@ a.tm-row:hover {
     line-height: 1.4;
 }
 
+.mv-row-expected {
+    margin-top: 5px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(65,255,175,.1);
+    color: #6dffb8;
+    font-size: .64rem;
+    font-weight: 700;
+    text-align: center;
+}
+
 .mv-setting-table {
     margin-top: 14px;
     display: flex;
@@ -926,13 +942,13 @@ a.tm-row:hover {
 
 .mv-setting-row {
     display: grid;
-    grid-template-columns: .8fr 1fr 1fr 1fr;
+    grid-template-columns: .7fr .9fr .9fr .9fr .9fr;
     gap: 4px;
     padding: 6px 8px;
     border: 1px solid rgba(65,255,175,.16);
     border-radius: 8px;
     background: rgba(3,11,12,.7);
-    font-size: .68rem;
+    font-size: .64rem;
     color: #eafff5;
     text-align: center;
 }
@@ -1244,8 +1260,6 @@ RT_HTML = """
 <span class="rt-head-no">No.{no}</span>
 </div>
 
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
-
 <div class="rt-model">{model}</div>
 
 <div class="rt-grid">
@@ -1259,7 +1273,7 @@ RT_HTML = """
 
 <div class="mv-setting-table">
 <div class="mv-setting-row mv-setting-row-head">
-<span>\u8a2d\u5b9a</span><span>\u53ef\u80fd\u6027</span><span>BB\u7406\u8ad6\u5024</span><span>RB\u7406\u8ad6\u5024</span>
+<span>\u8a2d\u5b9a</span><span>\u53ef\u80fd\u6027</span><span>BB\u7406\u8ad6\u5024</span><span>RB\u7406\u8ad6\u5024</span><span>\u671f\u5f85\u5dee\u679a</span>
 </div>
 {setting_rows}
 </div>
@@ -1269,12 +1283,18 @@ RT_HTML = """
 <span class="rt-rate-label">DATA CONFIDENCE</span>
 <span class="rt-rate-value {confidence_class}">{confidence}</span>
 </div>
+<div class="rt-rate-top">
+<span class="rt-rate-label">\u671f\u5f85\u5dee\u679a\uff08\u6b8b\u308a\u55b6\u696d\u6642\u9593\u63db\u7b97\uff09</span>
+<span class="rt-rate-value">{expected_diff}</span>
+</div>
 {narabi_detail_html}
 </div>
 
 <div class="rt-updated">\u30c7\u30fc\u30bf\u66f4\u65b0 {updated}</div>
 
 <a class="lab-map-link" href="?page=heatmap&from=realtime" target="_self">\U0001F5FA \u30d5\u30ed\u30a2\u3067\u898b\u308b</a>
+
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1349,8 +1369,6 @@ PD_HTML_HEAD = """
 <span class="pd-head-no">No.{no}</span>
 </div>
 
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
-
 <div class="pd-model">{model}</div>
 <div class="pd-range">{range_start} \u301c {range_end}</div>
 
@@ -1385,6 +1403,8 @@ PD_MAP_LINK_HTML = (
 
 PD_HTML_TAIL = """
 </div>
+
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1435,8 +1455,6 @@ TM_HTML_HEAD = """
 <span class="pd-head-no">{date}</span>
 </div>
 
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
-
 <div class="pd-model">\u660e\u65e5\u306e\u4e88\u60f3\u53f0</div>
 
 <div class="pd-table">
@@ -1453,6 +1471,8 @@ TM_HTML_TAIL = """
 
 <a class="lab-map-link" href="?page=heatmap&from=tomorrow" target="_self">\U0001F5FA \u30d5\u30ed\u30a2\u3067\u898b\u308b</a>
 
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
+
 </div>
 """
 
@@ -1463,8 +1483,6 @@ TM_DETAIL_HTML = """
 <span class="rt-head-label">TOMORROW</span>
 <span class="rt-head-no">No.{no}</span>
 </div>
-
-<a class="lab-back" href="?page=tomorrow" target="_self">&#8592; \u4e00\u89a7\u306b\u623b\u308b</a>
 
 <div class="rt-model">{model}</div>
 
@@ -1477,6 +1495,8 @@ TM_DETAIL_HTML = """
 </div>
 
 <div class="rt-updated">{date} \u306e\u4e88\u60f3</div>
+
+<a class="lab-back" href="?page=tomorrow" target="_self">&#8592; \u4e00\u89a7\u306b\u623b\u308b</a>
 
 </div>
 """
@@ -1570,7 +1590,7 @@ def render_grape_form(machine_no):
     with st.form(f"grape_form_{machine_no}"):
         grape_G = st.number_input("ぶどうを数えたG数", min_value=0, value=int(cur_G), step=100)
         grape_n = st.number_input("ぶどう回数", min_value=0, value=int(cur_n), step=1)
-        # st.columnsは狭い画面で縦積みになるため使わない（プロジェクトのCSSルールと同じ方針）。
+        # st.columnsは狭い画面（スマホ）で縦積みになるため使わない（既存ルール）。
         # ボタンはそのまま縦に並べる。
         submitted = st.form_submit_button("反映")
         cleared = st.form_submit_button("クリア")
@@ -1584,28 +1604,6 @@ def render_grape_form(machine_no):
     if cleared:
         _clear_grape_input(machine_no)
         st.rerun()
-
-
-def get_home_updated_label():
-    """
-    HOME画面の「データ更新」表示用。
-    本日のraw_data（全台）の中で一番新しい取得日時の「YYYY/M/D HH:MM」を返す。
-    今日分がまだ無ければ「-」を返す。
-    """
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    row = fetch_one(
-        "SELECT MAX(取得日時) AS max_dt FROM raw_data WHERE 日付 = ?",
-        [today],
-    )
-    max_dt = row["max_dt"] if row and row["max_dt"] else None
-    if not max_dt:
-        return "-"
-    try:
-        date_part, time_part = str(max_dt).split(" ")
-        y, m, d = date_part.split("-")
-        return f"{y}/{int(m)}/{int(d)} {time_part[:5]}"
-    except (IndexError, ValueError):
-        return str(max_dt)
 
 
 def _fmt_int(val):
@@ -1670,7 +1668,7 @@ def _fetch_today_analysis():
     return all_results, by_id, updated_lookup, date_label
 
 
-def _build_move_pick(r, rank, by_id):
+def _build_move_pick(r, rank, by_id, remaining_games):
     r = _apply_grape_override(r, by_id)
 
     left = by_id.get(r.get("left_id"))
@@ -1684,12 +1682,18 @@ def _build_move_pick(r, rank, by_id):
             "データも十分・高設定の可能性も高いため、3並び疑いがあります"
         )
 
+    expected_diff = estimate_expected_diff(
+        r["setting_possibility"], r["spec"], remaining_games
+    )
+    expected_diff_by_setting = get_diff_per_setting(r["spec"], remaining_games)
+
     setting_rows = "".join(
         MV_SETTING_ROW_HTML.format(
             setting=s,
             possibility=r["setting_possibility"][s],
             bb_spec=r["spec"][s]["bb"],
             rb_spec=r["spec"][s]["rb"],
+            expected_diff=expected_diff_by_setting[s],
         )
         for s in range(1, 7)
     )
@@ -1706,6 +1710,7 @@ def _build_move_pick(r, rank, by_id):
         "grape_total": _fmt_total(r.get("grape_prob")),
         "confidence": r["data_confidence"],
         "confidence_class": CONFIDENCE_CLASS.get(r["data_confidence"], ""),
+        "expected_diff": f"{expected_diff:+.0f}枚",
         "setting_rows": setting_rows,
         "narabi_note": narabi_note,
         "narabi_html": (
@@ -1718,16 +1723,39 @@ def _build_move_pick(r, rank, by_id):
 
 
 def load_move_picks():
-    # STEP改：台単体データ（own_score順）は移動おすすめ（priority_score順）と
-    # ほぼ同じ出力になるため廃止し、移動おすすめのみを返す。
+    """
+    MOVE画面向けに2つのアウトプットを返す。
+    - expected_picks: 176台全体を「期待差枚数」（残り営業時間・600回転/時換算）
+      の降順でランキングしたもの
+    - narabi_picks: narabi_suspicion=True（マイジャグラー限定の3並び疑い）の台のみ
+      （priority_score順のまま。台数は少ない想定）
+    単位が違う（枚 vs %のフラグ）ため、1本のランキングに混ぜず2本立てにしている。
+    """
     all_results, by_id, _updated_lookup, date_label = _fetch_today_analysis()
     if not all_results:
-        return [], date_label
+        return [], [], date_label
 
-    move_picks = [
-        _build_move_pick(r, i + 1, by_id) for i, r in enumerate(all_results)
+    remaining_games = _remaining_games()
+
+    ranked = sorted(
+        all_results,
+        key=lambda r: estimate_expected_diff(
+            r["setting_possibility"], r["spec"], remaining_games
+        ),
+        reverse=True,
+    )
+    expected_picks = [
+        _build_move_pick(r, i + 1, by_id, remaining_games)
+        for i, r in enumerate(ranked)
     ]
-    return move_picks, date_label
+
+    narabi_only = [r for r in all_results if r.get("narabi_suspicion")]
+    narabi_picks = [
+        _build_move_pick(r, i + 1, by_id, remaining_games)
+        for i, r in enumerate(narabi_only)
+    ]
+
+    return expected_picks, narabi_picks, date_label
 
 
 def load_realtime_machine_v2(machine_no):
@@ -1735,7 +1763,8 @@ def load_realtime_machine_v2(machine_no):
     r = by_id.get(machine_no)
     if r is None:
         return None
-    pick = _build_move_pick(r, None, by_id)
+    remaining_games = _remaining_games()
+    pick = _build_move_pick(r, None, by_id, remaining_games)
     pick["updated"] = updated_lookup.get(machine_no) or "-"
     return pick
 
@@ -1754,6 +1783,7 @@ MV_ROW_HTML = """
 <span>G数 {games}</span>
 <span>合成 {total}</span>
 </div>
+<div class="mv-row-expected">期待差枚（残り営業時間換算） {expected_diff}</div>
 {narabi_html}
 </a>
 """
@@ -1767,6 +1797,7 @@ def build_move_section_html(head_html, tail_html, picks):
             rank=p["rank"], no=p["no"], model=p["model"],
             confidence=p["confidence"], confidence_class=p["confidence_class"],
             bb=p["bb"], rb=p["rb"], games=p["games"], total=p["total"],
+            expected_diff=p["expected_diff"],
             narabi_html=p["narabi_html"],
         )
         for p in picks
@@ -1810,12 +1841,10 @@ MV_HTML_HEAD = """
 <span class="pd-head-label">MOVE</span>
 <span class="pd-head-no">{date}</span>
 </div>
-
-<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 """
 
 MV_SECTION_MOVE_HEAD = """
-<div class="pd-model">移動おすすめ（隣接状況を含めた優先順）</div>
+<div class="pd-model">期待枚数ランキング（残り営業時間×600回転換算）</div>
 
 <div class="pd-table">
 """
@@ -1824,8 +1853,20 @@ MV_SECTION_MOVE_TAIL = """
 </div>
 """
 
+MV_SECTION_NARABI_HEAD = """
+<div class="pd-model">3並び疑いの台</div>
+
+<div class="pd-table">
+"""
+
+MV_SECTION_NARABI_TAIL = """
+</div>
+"""
+
 MV_HTML_TAIL = """
 <a class="lab-map-link" href="?page=heatmap&from=move&mp={mp}" target="_self">🗺 フロアで見る</a>
+
+<a class="lab-back" href="?page=home" target="_self">&#8592; BACK</a>
 
 </div>
 """
@@ -1836,6 +1877,7 @@ MV_SETTING_ROW_HTML = """
 <span>{possibility}%</span>
 <span>1/{bb_spec:g}</span>
 <span>1/{rb_spec:g}</span>
+<span>{expected_diff:+.0f}枚</span>
 </div>
 """
 
@@ -1846,8 +1888,6 @@ MV_DETAIL_HTML = """
 <span class="rt-head-label">MOVE</span>
 <span class="rt-head-no">No.{no}</span>
 </div>
-
-<a class="lab-back" href="?page=move" target="_self">&#8592; 一覧に戻る</a>
 
 <div class="rt-model">{model}</div>
 
@@ -1862,7 +1902,7 @@ MV_DETAIL_HTML = """
 
 <div class="mv-setting-table">
 <div class="mv-setting-row mv-setting-row-head">
-<span>設定</span><span>可能性</span><span>BB理論値</span><span>RB理論値</span>
+<span>設定</span><span>可能性</span><span>BB理論値</span><span>RB理論値</span><span>期待差枚</span>
 </div>
 {setting_rows}
 </div>
@@ -1872,10 +1912,16 @@ MV_DETAIL_HTML = """
 <span class="rt-rate-label">DATA CONFIDENCE</span>
 <span class="rt-rate-value {confidence_class}">{confidence}</span>
 </div>
+<div class="rt-rate-top">
+<span class="rt-rate-label">期待差枚（残り営業時間換算）</span>
+<span class="rt-rate-value">{expected_diff}</span>
+</div>
 {narabi_detail_html}
 </div>
 
 <div class="rt-updated">{date} 時点</div>
+
+<a class="lab-back" href="?page=move" target="_self">&#8592; 一覧に戻る</a>
 
 </div>
 """
@@ -2182,11 +2228,11 @@ def get_tomorrow_machine_colors():
 
 
 def get_move_map_colors(mp):
-    # MOVE「移動おすすめ」セクションで、今表示中のページ（5台）だけを水色で塗る。
-    move_picks, _mv_date = load_move_picks()
-    if not move_picks:
+    # MOVE「期待枚数ランキング」セクションで、今表示中のページ（5台）だけを水色で塗る。
+    expected_picks, _narabi_picks, _mv_date = load_move_picks()
+    if not expected_picks:
         return {}
-    page_picks = move_picks[mp * MV_PAGE_SIZE: (mp + 1) * MV_PAGE_SIZE]
+    page_picks = expected_picks[mp * MV_PAGE_SIZE: (mp + 1) * MV_PAGE_SIZE]
     return {int(p["no"]): HM_TOMORROW_COLOR for p in page_picks}
 
 
@@ -2584,15 +2630,16 @@ elif page == "tomorrow":
             )
             st.markdown(tm_html, unsafe_allow_html=True)
 elif page == "move":
-    move_picks, mv_date = load_move_picks()
-    if not move_picks:
+    expected_picks, narabi_picks, mv_date = load_move_picks()
+    if not expected_picks:
         st.markdown(
             SOON_HTML.format(en="MOVE", jp="移動候補データがありません"),
             unsafe_allow_html=True,
         )
     else:
         no = st.query_params.get("no")
-        pick = next((p for p in move_picks if p["no"] == no), None)
+        # narabi_picksは同じ176台の部分集合なので、expected_picksだけ探せば足りる
+        pick = next((p for p in expected_picks if p["no"] == no), None)
         if pick:
             st.markdown(
                 MV_DETAIL_HTML.format(date=mv_date or "-", **pick),
@@ -2605,17 +2652,23 @@ elif page == "move":
             except ValueError:
                 mp = 0
 
-            move_page_picks = move_picks[mp * MV_PAGE_SIZE: (mp + 1) * MV_PAGE_SIZE]
+            move_page_picks = expected_picks[mp * MV_PAGE_SIZE: (mp + 1) * MV_PAGE_SIZE]
 
             move_section = build_move_section_html(
                 MV_SECTION_MOVE_HEAD, MV_SECTION_MOVE_TAIL, move_page_picks
             )
-            move_nav = build_move_nav_html("mp", mp, len(move_picks))
+            move_nav = build_move_nav_html("mp", mp, len(expected_picks))
+
+            # 3並び疑いの台は台数が少ない想定のため、ページングなしで全件表示
+            narabi_section = build_move_section_html(
+                MV_SECTION_NARABI_HEAD, MV_SECTION_NARABI_TAIL, narabi_picks
+            )
 
             mv_html = (
                 MV_HTML_HEAD.format(date=mv_date or "-")
                 + move_section
                 + move_nav
+                + narabi_section
                 + MV_HTML_TAIL.format(mp=mp)
             )
             st.markdown(mv_html, unsafe_allow_html=True)
@@ -2685,7 +2738,6 @@ elif page == "heatmap":
         f'<span class="pd-head-label">HEATMAP</span>'
         f'<span class="pd-head-no">{date_label}</span>'
         f'</div>'
-        f'<a class="lab-back" href="?page={back_to}" target="_self">&#8592; 戻る</a>'
         f'<div class="pd-model">MACHINE MAP / 台マップ（タップすると{tap_hint}に移動）</div>'
         f'{nav_html}'
         f'</div>',
@@ -2699,11 +2751,17 @@ elif page == "heatmap":
         build_heatmap_html(seat_colors, legend_items, link_page),
         height=760, scrolling=False,
     )
+    st.markdown(
+        f'<div class="pd-wrap">'
+        f'<a class="lab-back" href="?page={back_to}" target="_self">&#8592; 戻る</a>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 elif page in MODULES:
     en, jp = MODULES[page]
     st.markdown(SOON_HTML.format(en=en, jp=jp), unsafe_allow_html=True)
 else:
     st.markdown(
-        HOME_HTML.format(store=STORE_NAME, updated=get_home_updated_label()),
+        HOME_HTML.format(store=STORE_NAME, updated=UPDATED_AT),
         unsafe_allow_html=True,
     )
