@@ -1570,6 +1570,10 @@ def _apply_grape_override(r, by_id):
 
     updated["own_score"] = round(own_score, 1)
     updated["narabi_suspicion"] = suspicion
+    updated["narabi_group"] = (
+        sorted({left["id"], updated["id"], right["id"]})
+        if suspicion and left and right else None
+    )
     updated["priority_score"] = round(max(own_score, 50.0) if suspicion else own_score, 1)
     return updated
 
@@ -1670,15 +1674,13 @@ def _fetch_today_analysis():
 def _build_move_pick(r, rank, by_id, remaining_games):
     r = _apply_grape_override(r, by_id)
 
-    left = by_id.get(r.get("left_id"))
-    right = by_id.get(r.get("right_id"))
     narabi_note = ""
     if r.get("narabi_suspicion"):
-        left_no = left["id"] if left else "-"
-        right_no = right["id"] if right else "-"
+        group = r.get("narabi_group") or [r["id"]]
+        group_text = "・".join(f"No.{no}" for no in group)
         narabi_note = (
-            f"両隣（No.{left_no}／No.{right_no}）もマイジャグラーで、"
-            "データも十分・高設定の可能性も高いため、3並び疑いがあります"
+            f"{group_text}がいずれもマイジャグラーで高設定の可能性が高く、"
+            "3並びの疑いがあります"
         )
 
     expected_diff = estimate_expected_diff(
