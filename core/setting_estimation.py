@@ -245,14 +245,20 @@ def check_narabi_suspicion(target, left, right,
                             high_score_threshold=50.0,
                             min_neighbor_confidence=("MEDIUM", "HIGH")):
     """
-    マイジャグラーに限り、自分のDATA CONFIDENCEがLOWでも、
-    両隣がマイジャグラーかつ十分なデータ・高い高設定っぽさスコアを
-    持っていれば「3並び疑い」とみなす。
+    マイジャグラー限定の「3並び疑い」判定。次の2つのケースのどちらかで真になる。
+
+    ケース1（データ量に関わらず素直に3並び）：
+      3台とも（自分含めて）own_score（設定4〜6合計%）がhigh_score_thresholdを
+      超えていれば、DATA CONFIDENCEに関わらず3並び疑いとする。
+
+    ケース2（拾い上げ）：
+      自分のDATA CONFIDENCEがLOWでも、両隣がマイジャグラーかつ十分なデータ・
+      高いown_scoreを持っていれば「3並び疑い」とみなす。
 
     target/left/right: analyze_machine()の戻り値と同じ形式の辞書。
                         左右どちらかがNoneの場合はフラグを立てない。
 
-    シミュレーション結果（このロジックのおおもとの検証）:
+    ケース2のシミュレーション結果（このロジックのおおもとの検証）:
     - 自分のスコアだけのランキングでは、低データの本物の
       高設定台を拾えたのは13.2%
     - この隣接台フラグを併用すると78.6%まで拾えるようになった
@@ -264,15 +270,27 @@ def check_narabi_suspicion(target, left, right,
         return False
     if left["machine"] != NARABI_TARGET_MACHINE or right["machine"] != NARABI_TARGET_MACHINE:
         return False
+
+    # ケース1：3台ともown_scoreが高ければ、DATA CONFIDENCEを問わず3並び疑いとする
+    target_score = get_high_setting_score(target["setting_possibility"])
+    left_score = get_high_setting_score(left["setting_possibility"])
+    right_score = get_high_setting_score(right["setting_possibility"])
+    if (target_score > high_score_threshold
+            and left_score > high_score_threshold
+            and right_score > high_score_threshold):
+        return True
+
+    # ケース2：自分はデータが少なくて分からないが、両隣が十分なデータで
+    # 高設定っぽいなら拾い上げる（元々の設計）
     if target["data_confidence"] != "LOW":
-        # 自分に十分なデータがあるなら、フラグに頼らず自分の推測を信頼する
+        # 自分に十分なデータがあり、かつケース1にも該当しないなら、
+        # 自分の推測をそのまま信頼する
         return False
 
     for neighbor in (left, right):
         if neighbor["data_confidence"] not in min_neighbor_confidence:
             return False
-        neighbor_score = get_high_setting_score(neighbor["setting_possibility"])
-        if neighbor_score <= high_score_threshold:
+        if get_high_setting_score(neighbor["setting_possibility"]) <= high_score_threshold:
             return False
     return True
 
@@ -311,12 +329,21 @@ def build_move_candidates(machine_records, top_n=10):
         analyzed[rec["id"]] = result
 
     candidates = []
+    narabi_groups = {}  # {id: 3並びグループのidの集合}
     for result in analyzed.values():
         left = analyzed.get(result["left_id"]) if result["left_id"] is not None else None
         right = analyzed.get(result["right_id"]) if result["right_id"] is not None else None
 
         own_score = get_high_setting_score(result["setting_possibility"])
         suspicion = check_narabi_suspicion(result, left, right)
+
+        if suspicion:
+            # 中央（result）だけでなく、左右の台も一緒に3並び疑いとして扱う。
+            # 例えば975・976・977が3並びなら、976を中心に判定していても
+            # 975・977もどちらも「3並び疑いの台」として拾えるようにする。
+            group_ids = {result["id"], left["id"], right["id"]}
+            for gid in group_ids:
+                narabi_groups.setdefault(gid, set()).update(group_ids)
 
         # 3並び疑いフラグが立った台は、自分のスコアが低くても
         # ランキング上で埋もれないよう優先度を底上げする
@@ -327,6 +354,16 @@ def build_move_candidates(machine_records, top_n=10):
         result["narabi_suspicion"] = suspicion
         result["priority_score"] = round(priority_score, 1)
         candidates.append(result)
+
+    # 中央として判定されていない左右の台にも、narabi_suspicion=Trueと
+    # グループ番号一覧を反映する
+    for result in candidates:
+        gid = result["id"]
+        if gid in narabi_groups:
+            result["narabi_suspicion"] = True
+            result["narabi_group"] = sorted(narabi_groups[gid])
+        else:
+            result.setdefault("narabi_group", None)
 
     candidates.sort(key=lambda r: r["priority_score"], reverse=True)
     return candidates[:top_n]
