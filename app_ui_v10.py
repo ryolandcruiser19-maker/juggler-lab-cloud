@@ -1223,11 +1223,20 @@ DEFAULT_MACHINE_NO = 969
 # 既存のテーブル・関数は変更していない。
 
 def get_all_machines():
+    # v10: 機種名は、最新の日次データ（daily_data）を優先して使う。
+    # machinesマスタの機種名が、一部の台（マイジャグラーVI）で「V」のままだったため。
+    # 日次データに無い台は、マスタの機種名をそのまま使う。DBは書き換えない。
     rows = fetch_all(
         """
-        SELECT number, machine, island
-        FROM machines
-        ORDER BY number
+        SELECT
+            m.number AS number,
+            COALESCE(NULLIF(d.機種, ''), m.machine) AS machine,
+            m.island AS island
+        FROM machines m
+        LEFT JOIN daily_data d
+               ON d.台番号 = m.number
+              AND d.日付 = (SELECT MAX(日付) FROM daily_data)
+        ORDER BY m.number
         """
     )
     return [dict(row) for row in rows]
