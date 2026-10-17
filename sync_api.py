@@ -44,6 +44,17 @@ class RealtimeData(BaseModel):
     P_CUBE更新時刻: str | None
 
 
+class StoreDailyData(BaseModel):
+    日付: str
+    店舗: str
+    機種: str
+    台番号: int
+    BB: int
+    RB: int
+    G数: int
+    合成確率: float | None = None
+
+
 @app.post("/sync")
 def sync_data(data: DailyData):
 
@@ -140,6 +151,67 @@ def realtime_sync(data: list[RealtimeData]):
                 row.取得種別,
                 row.取得回数,
                 row.P_CUBE更新時刻,
+            )
+            for row in data
+        ],
+    )
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "status": "ok",
+        "count": len(data),
+    }
+
+
+@app.post("/sync-store-daily")
+def sync_store_daily(data: list[StoreDailyData]):
+    # 追加店舗（豊平Hなど）の日次データ専用。
+    # 既存の daily_data / machines には一切触れず、別テーブルに保存する。
+
+    conn = sqlite3.connect(DB_PATH)
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS store_daily_data (
+            日付 TEXT NOT NULL,
+            店舗 TEXT NOT NULL,
+            機種 TEXT,
+            台番号 INTEGER NOT NULL,
+            BB INTEGER,
+            RB INTEGER,
+            G数 INTEGER,
+            合成確率 REAL,
+            PRIMARY KEY (日付, 店舗, 台番号)
+        )
+        """
+    )
+
+    conn.executemany(
+        """
+        INSERT OR REPLACE INTO store_daily_data (
+            日付,
+            店舗,
+            機種,
+            台番号,
+            BB,
+            RB,
+            G数,
+            合成確率
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                row.日付,
+                row.店舗,
+                row.機種,
+                row.台番号,
+                row.BB,
+                row.RB,
+                row.G数,
+                row.合成確率,
             )
             for row in data
         ],
