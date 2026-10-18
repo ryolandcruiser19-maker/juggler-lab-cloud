@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ==================================
 # ジャグラーラボ v11  /  HOME
-# v11: HOMEで店舗（Hタワー店 / 豊平H）を選べる。豊平HはPAST DATAのみ（専用テーブル store_daily_data を参照）。
+# v11: HOMEで店舗（Hタワー店 / 豊平H店）を選べる。豊平H店はPAST DATAのみ（専用テーブル store_daily_data を参照）。
 #      Hタワー店の表示・分析は v10 のまま変更していない。
 # v10: REALTIME・MOVEを一時停止（非表示）し、PAST DATAとTOMORROWのみ表示する。
 #      HOMEの「データ更新」は、日次データの最新更新を表示する。
@@ -2634,7 +2634,7 @@ body {{
 # テーブルが無い・読めないときは、豊平Hの画面だけが「データなし」になり、Hタワー店は影響を受けない。
 
 TOYOHIRA_DB_NAME = "豊平H"
-TOYOHIRA_LABEL = "豊平H"
+TOYOHIRA_LABEL = "豊平H店"  # 画面に出す名前（DB上の店舗名は「豊平H」のまま）
 
 
 def get_toyohira_machines():
@@ -2747,7 +2747,7 @@ TOMORROW_OFF_CARD = """<div class="module-card module-card--wide module-card--of
 <span class="module-no">02</span>
 <span class="module-en">TOMORROW</span>
 <span class="module-jp">明日の予想</span>
-<span class="module-desc">豊平Hは準備中です。</span>
+<span class="module-desc">豊平H店は準備中です。</span>
 </div>"""
 
 
@@ -2834,7 +2834,7 @@ elif page == "past" and store == "toyohira":
     if not toyohira_machines:
         st.markdown(
             to_toyohira_links(
-                SOON_HTML.format(en="PAST DATA", jp="豊平Hのデータがありません")
+                SOON_HTML.format(en="PAST DATA", jp="豊平H店のデータがありません")
             ),
             unsafe_allow_html=True,
         )
@@ -2887,7 +2887,7 @@ elif store == "toyohira" and page in ("tomorrow", "heatmap", "realtime", "move")
         "realtime": "REALTIME", "move": "MOVE",
     }[page]
     st.markdown(
-        to_toyohira_links(SOON_HTML.format(en=_en, jp="豊平Hは準備中です")),
+        to_toyohira_links(SOON_HTML.format(en=_en, jp="豊平H店は準備中です")),
         unsafe_allow_html=True,
     )
 elif page == "past":
