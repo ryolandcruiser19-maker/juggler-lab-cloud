@@ -2629,7 +2629,7 @@ body {{
 # ==================================
 # v11: 店舗の切り替え（豊平H）
 # ==================================
-# 豊平Hのデータは、クラウドの専用テーブル store_daily_data（日付・店舗・機種・台番号・BB・RB・G数・合成確率）
+# 豊平Hのデータは、クラウドの専用テーブル store_daily_data（日付・店舗・機種・台番号・BB・RB・G数・合成確率・評価）
 # から読むだけ。Hタワー店の daily_data / machines / 分析には一切触れない。
 # テーブルが無い・読めないときは、豊平Hの画面だけが「データなし」になり、Hタワー店は影響を受けない。
 
@@ -2672,11 +2672,12 @@ def get_toyohira_last_update():
 
 
 def load_toyohira_past_week(machine_no, week_offset):
-    # load_past_week と同じ形式で返す。評価は未作成のため「-」。
+    # load_past_week と同じ形式で返す。評価は store_daily_data の「評価」列（なければ「-」）。
+    has_rating = True
     try:
         rows = fetch_all(
             """
-            SELECT 日付, 機種, BB, RB, G数, 合成確率
+            SELECT 日付, 機種, BB, RB, G数, 合成確率, 評価
             FROM store_daily_data
             WHERE 店舗 = ? AND 台番号 = ?
             ORDER BY 日付 DESC
@@ -2684,7 +2685,20 @@ def load_toyohira_past_week(machine_no, week_offset):
             [TOYOHIRA_DB_NAME, machine_no],
         )
     except Exception:
-        return [], 0, None
+        # 評価の列がまだ無いとき（評価の送信前）は、従来どおり評価なしで読む。
+        has_rating = False
+        try:
+            rows = fetch_all(
+                """
+                SELECT 日付, 機種, BB, RB, G数, 合成確率
+                FROM store_daily_data
+                WHERE 店舗 = ? AND 台番号 = ?
+                ORDER BY 日付 DESC
+                """,
+                [TOYOHIRA_DB_NAME, machine_no],
+            )
+        except Exception:
+            return [], 0, None
     if not rows:
         return [], 0, None
 
@@ -2706,7 +2720,7 @@ def load_toyohira_past_week(machine_no, week_offset):
             "rb": str(row["RB"]) if row["RB"] is not None else "-",
             "games": f"{games:,}" if games is not None else "-",
             "total": f"1/{total_val}" if total_val is not None else "-",
-            "rate": "-",
+            "rate": (row["評価"] if has_rating else None) or "-",
         })
     return days, total, model
 
