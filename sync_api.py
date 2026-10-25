@@ -53,6 +53,12 @@ class StoreDailyData(BaseModel):
     RB: int
     G数: int
     合成確率: float | None = None
+    # 評価など。送られてこない場合は None（既存の保存値は消さない）
+    評価: str | None = None
+    信頼度補正: str | None = None
+    イベント種別: str | None = None
+    備考: str | None = None
+    島: str | None = None
 
 
 @app.post("/sync")
@@ -188,9 +194,17 @@ def sync_store_daily(data: list[StoreDailyData]):
         """
     )
 
+    # 評価などの列がなければ足す（既存のデータはそのまま残る）
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(store_daily_data)")}
+    for column in ("評価", "信頼度補正", "イベント種別", "備考", "島"):
+        if column not in existing:
+            conn.execute(f"ALTER TABLE store_daily_data ADD COLUMN {column} TEXT")
+
+    # 同じ日・店舗・台番号は上書き。ただし評価などが送られてこない（None）ときは、
+    # すでに保存されている値を残す。
     conn.executemany(
         """
-        INSERT OR REPLACE INTO store_daily_data (
+        INSERT INTO store_daily_data (
             日付,
             店舗,
             機種,
@@ -198,9 +212,25 @@ def sync_store_daily(data: list[StoreDailyData]):
             BB,
             RB,
             G数,
-            合成確率
+            合成確率,
+            評価,
+            信頼度補正,
+            イベント種別,
+            備考,
+            島
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(日付, 店舗, 台番号) DO UPDATE SET
+            機種 = excluded.機種,
+            BB = excluded.BB,
+            RB = excluded.RB,
+            G数 = excluded.G数,
+            合成確率 = excluded.合成確率,
+            評価 = COALESCE(excluded.評価, store_daily_data.評価),
+            信頼度補正 = COALESCE(excluded.信頼度補正, store_daily_data.信頼度補正),
+            イベント種別 = COALESCE(excluded.イベント種別, store_daily_data.イベント種別),
+            備考 = COALESCE(excluded.備考, store_daily_data.備考),
+            島 = COALESCE(excluded.島, store_daily_data.島)
         """,
         [
             (
@@ -212,6 +242,11 @@ def sync_store_daily(data: list[StoreDailyData]):
                 row.RB,
                 row.G数,
                 row.合成確率,
+                row.評価,
+                row.信頼度補正,
+                row.イベント種別,
+                row.備考,
+                row.島,
             )
             for row in data
         ],
