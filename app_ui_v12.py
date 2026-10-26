@@ -2821,20 +2821,23 @@ def to_toyohira_links(html):
 # ==================================
 # v12: 高設定投入率（RATE）
 # ==================================
-# 評価（◎○△）の件数から、店舗ごとの高設定投入率を出して見せるだけ。
-# DBは読み取りのみ。Hタワー店は daily_data、豊平H店は store_daily_data を読む。
-# 投入率 = 該当評価の台数 ÷ 評価が入っている台数（◎○△－× すべてが分母。評価が空の台は除外）
-# 合計 = (◎+○+△) ÷ 評価が入っている台数。評価は推定値であり、実際の設定投入率そのものではない。
+# 評価（◎○△）の件数から、店舗ごとの投入率を出して見せるだけ。DBは読み取りのみ。
+# Hタワー店は daily_data、豊平H店は store_daily_data を読む。
+# 評価の意味：◎=設定6相当、○=設定5相当、△=設定4・3相当の合成確率
+# 高設定計 = ◎+○（設定5以上相当）／ ◎○△計 = 設定3以上相当（参考）
+# 分母 = その日その店舗の全台（評価が空の台・×・－ は「高設定ではない」扱いで分母に入れる）。
+# ただし、1日の台数が通常より大きく少ない日（過去に◎○△の台だけを記録していた期間など）は、
+# 分母が分からないため集計から除外する。評価は推定値で、実際の設定投入率そのものではない。
 
 RATE_TOWER_DB_NAME = "ひまわりタワー"
 RATE_ALL_MACHINES = "全機種"
 RATE_WEEKDAYS = "月火水木金土日"
-RATE_NINTH_DAYS = (9, 19, 29)
 RATE_MODES = [
     ("day", "日別"),
     ("machine", "機種別"),
     ("weekday", "曜日別"),
-    ("ninth", "9の日"),
+    ("dayend", "日の末尾"),
+    ("numend", "台番号末尾"),
 ]
 RATE_PERIODS = [
     ("直近7日", 7),
@@ -2843,66 +2846,110 @@ RATE_PERIODS = [
     ("全期間", None),
 ]
 RATE_SAMPLE_MIN_DAYS = 5  # これ未満の日数の行には※（参考値）をつける
+RATE_FULL_DAY_RATIO = 0.9  # 1日の台数が「通常の台数」のこの割合に満たない日は除外
+RATE_DAY_TYPES = [("all", "全日"), ("normal", "通常のみ"), ("event", "イベント日のみ")]
 
 RATE_CSS = """
 <style>
 .rate-sum { max-width: 480px; margin: 10px auto 6px; color: #a9c8bc; font-size: .78rem; letter-spacing: .04em; }
 .rate-table { max-width: 480px; margin: 8px auto 0; }
-.rate-row { display: flex; align-items: center; gap: 4px; padding: 7px 4px; border-bottom: 1px solid rgba(65,255,175,.12); color: #eafff5; font-size: .8rem; }
-.rate-row-head { color: #6dffb8; font-size: .66rem; font-weight: 800; letter-spacing: .06em; border-bottom: 1px solid rgba(65,255,175,.34); }
+.rate-row { display: flex; align-items: center; gap: 3px; padding: 7px 4px; border-bottom: 1px solid rgba(65,255,175,.12); color: #eafff5; font-size: .74rem; }
+.rate-row-head { color: #6dffb8; font-size: .62rem; font-weight: 800; letter-spacing: .04em; line-height: 1.25; border-bottom: 1px solid rgba(65,255,175,.34); }
 .rate-row-all { background: rgba(14,60,44,.55); font-weight: 800; }
+.rate-row-hit { background: rgba(255,214,80,.13); }
 .rate-c { text-align: right; font-variant-numeric: tabular-nums; }
-.rate-c-label { flex: 1.5; text-align: left; font-weight: 700; word-break: break-all; }
-.rate-c-n { flex: 1.0; color: #a9c8bc; font-size: .68rem; line-height: 1.25; }
-.rate-c-p { flex: 0.9; }
-.rate-c-tot { flex: 1.2; color: #6dffb8; font-weight: 800; }
+.rate-c-label { flex: 1.35; text-align: left; font-weight: 700; word-break: break-all; }
+.rate-c-n { flex: 0.9; color: #a9c8bc; font-size: .62rem; line-height: 1.25; }
+.rate-c-p { flex: 0.8; }
+.rate-c-hi { flex: 1.15; color: #6dffb8; font-weight: 800; }
+.rate-c-ref { flex: 0.9; color: #a9c8bc; }
 .rate-bar { display: block; height: 4px; margin-top: 3px; border-radius: 2px; background: rgba(65,255,175,.14); overflow: hidden; }
 .rate-bar > span { display: block; height: 100%; background: #6dffb8; }
 .rate-note { max-width: 480px; margin: 10px auto 0; color: #7a8f88; font-size: .7rem; line-height: 1.5; }
+.rate-find { max-width: 480px; margin: 10px auto 0; padding: 8px 10px; border-radius: 8px; background: rgba(255,214,80,.10); color: #ffe9a8; font-size: .78rem; line-height: 1.5; }
 </style>
 """
 
 
+def rate_today_digit():
+    # 今日（日本時間）の日の末尾。サーバーの時刻設定に左右されないよう +9時間 の固定値で計算
+    import datetime as _dt
+    jst = _dt.timezone(_dt.timedelta(hours=9))
+    return _dt.datetime.now(jst).day % 10
+
+
+def rate_dayend_label(k):
+    if k == 0:
+        return "0の日(10・20・30)"
+    if k == 1:
+        return "1の日(1・11・21・31)"
+    return f"{k}の日({k}・1{k}・2{k})"
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def rate_load_data(store_key):
-    # 日付・機種・評価だけを読む（読み取りのみ）。読めないときは空表を返す。
-    cols = ["日付", "機種", "評価"]
-    try:
-        if store_key == "toyohira":
-            rows = fetch_all(
-                "SELECT 日付, 機種, 評価 FROM store_daily_data WHERE 店舗 = ?",
-                [TOYOHIRA_DB_NAME],
-            )
-        else:
-            rows = fetch_all(
-                "SELECT 日付, 機種, 評価 FROM daily_data WHERE 店舗 = ?",
-                [RATE_TOWER_DB_NAME],
-            )
-            if not rows:
-                rows = fetch_all("SELECT 日付, 機種, 評価 FROM daily_data")
-    except Exception:
+    # 日付・機種・台番号・評価・イベント種別を読む（読み取りのみ）。読めないときは空表を返す。
+    cols = ["日付", "機種", "台番号", "評価", "イベント種別"]
+    if store_key == "toyohira":
+        table, where, params = "store_daily_data", " WHERE 店舗 = ?", [TOYOHIRA_DB_NAME]
+    else:
+        table, where, params = "daily_data", " WHERE 店舗 = ?", [RATE_TOWER_DB_NAME]
+    rows = None
+    for sel in ("日付, 機種, 台番号, 評価, イベント種別",
+                "日付, 機種, 台番号, 評価, '' AS イベント種別"):
+        try:
+            rows = fetch_all("SELECT " + sel + " FROM " + table + where, params)
+            if not rows and store_key != "toyohira":
+                rows = fetch_all("SELECT " + sel + " FROM " + table)
+            break
+        except Exception:
+            rows = None
+    if not rows:
         return pd.DataFrame(columns=cols)
     return pd.DataFrame([dict(r) for r in rows], columns=cols)
 
 
-def rate_summarize(df, mode, machine, period):
-    # 戻り値: (行のリスト, 集計対象日数, 集計対象のべ台数)
-    # 評価が空の行は分子・分母のどちらにも入れない。
+def rate_summarize(df, mode, machine, period, day_type="all", day_digit=None):
+    # 戻り値: (行のリスト, 集計対象日数, 集計対象のべ台数, 全体の行, 除外した日数)
+    empty = ([], 0, 0, None, 0)
     if df is None or df.empty:
-        return [], 0, 0, None
-    d = df[df["評価"].notna() & (df["評価"].astype(str).str.strip() != "")].copy()
+        return empty
+    d = df.copy()
     d["dt"] = pd.to_datetime(d["日付"], errors="coerce")
     d = d.dropna(subset=["dt"])
     if d.empty:
-        return [], 0, 0, None
+        return empty
+
+    # 台数が通常より大きく少ない日は除外（分母が分からないため）
+    cnt = d.groupby("日付").size()
+    typical = float(cnt.median())
+    ok_days = cnt[cnt >= typical * RATE_FULL_DAY_RATIO].index
+    excluded = int(len(cnt) - len(ok_days))
+    d = d[d["日付"].isin(ok_days)]
+    if d.empty:
+        return ([], 0, 0, None, excluded)
+
+    # 評価が空 = 高設定ではない扱い
+    d["評価"] = d["評価"].fillna("").astype(str).str.strip()
 
     if period is not None:
         cutoff = d["dt"].max() - pd.Timedelta(days=period - 1)
         d = d[d["dt"] >= cutoff]
+
+    ev = d["イベント種別"].fillna("").astype(str).str.strip()
+    is_normal = ev.str.contains("通常")
+    if day_type == "normal":
+        d = d[is_normal]
+    elif day_type == "event":
+        d = d[(ev != "") & (~is_normal)]
+
+    if day_digit is not None:
+        d = d[(d["dt"].dt.day % 10) == day_digit]
+
     if machine and machine != RATE_ALL_MACHINES:
         d = d[d["機種"] == machine]
     if d.empty:
-        return [], 0, 0, None
+        return ([], 0, 0, None, excluded)
 
     if mode == "day":
         d["key"] = d["dt"].apply(
@@ -2915,10 +2962,18 @@ def rate_summarize(df, mode, machine, period):
     elif mode == "weekday":
         d["key"] = d["dt"].apply(lambda x: RATE_WEEKDAYS[x.weekday()] + "曜")
         d["ord"] = d["dt"].apply(lambda x: x.weekday())
-    else:  # ninth
-        is_ninth = d["dt"].dt.day.isin(RATE_NINTH_DAYS)
-        d["key"] = is_ninth.map({True: "9の日(9/19/29)", False: "それ以外"})
-        d["ord"] = is_ninth.map({True: 0, False: 1})
+    elif mode == "dayend":
+        dig = d["dt"].dt.day % 10
+        d["key"] = dig.apply(rate_dayend_label)
+        d["ord"] = dig
+    else:  # numend（台番号の末尾）
+        num = pd.to_numeric(d["台番号"], errors="coerce")
+        d = d[num.notna()].copy()
+        if d.empty:
+            return ([], 0, 0, None, excluded)
+        dig = (num[num.notna()].astype(int) % 10)
+        d["key"] = dig.apply(lambda k: f"末尾{k}")
+        d["ord"] = dig
 
     def _row(label, g, order):
         n = len(g)
@@ -2928,7 +2983,8 @@ def rate_summarize(df, mode, machine, period):
         return {
             "label": label, "days": int(g["日付"].nunique()), "n": n,
             "s": s / n * 100, "a": a / n * 100, "b": b / n * 100,
-            "tot": (s + a + b) / n * 100, "order": order,
+            "hi": (s + a) / n * 100, "tot": (s + a + b) / n * 100,
+            "order": order,
         }
 
     rows = [_row(k, g, g["ord"].iloc[0]) for k, g in d.groupby("key", sort=False)]
@@ -2936,24 +2992,31 @@ def rate_summarize(df, mode, machine, period):
         rows.sort(key=lambda r: -r["n"])
     else:
         rows.sort(key=lambda r: r["order"])
-    return rows, int(d["日付"].nunique()), len(d), _row("全体", d, 0)
+    return rows, int(d["日付"].nunique()), len(d), _row("全体", d, 0), excluded
 
 
-def build_rate_table_html(rows, all_row, mode):
+def build_rate_table_html(rows, all_row, mode, hit_digit=None):
     def pct(v):
         return f"{v:.1f}%"
 
     def one(r, extra_cls=""):
-        mark = "※" if (mode in ("weekday", "ninth", "machine") and r["days"] < RATE_SAMPLE_MIN_DAYS and extra_cls == "") else ""
+        small = mode in ("machine", "weekday", "dayend", "numend")
+        mark = "※" if (small and r["days"] < RATE_SAMPLE_MIN_DAYS and extra_cls == "") else ""
+        label = r["label"]
+        cls = extra_cls
+        if mode == "numend" and hit_digit is not None and extra_cls == "" and int(r["order"]) == hit_digit:
+            cls = "rate-row-hit"
+            label = label + " ★"
         return (
-            f'<div class="rate-row {extra_cls}">'
-            f'<span class="rate-c rate-c-label">{r["label"]}{mark}</span>'
+            f'<div class="rate-row {cls}">'
+            f'<span class="rate-c rate-c-label">{label}{mark}</span>'
             f'<span class="rate-c rate-c-n">{r["days"]}日<br>{r["n"]}台</span>'
             f'<span class="rate-c rate-c-p">{pct(r["s"])}</span>'
             f'<span class="rate-c rate-c-p">{pct(r["a"])}</span>'
             f'<span class="rate-c rate-c-p">{pct(r["b"])}</span>'
-            f'<span class="rate-c rate-c-tot">{pct(r["tot"])}'
-            f'<span class="rate-bar"><span style="width:{min(r["tot"], 100):.0f}%"></span></span></span>'
+            f'<span class="rate-c rate-c-hi">{pct(r["hi"])}'
+            f'<span class="rate-bar"><span style="width:{min(r["hi"], 100):.0f}%"></span></span></span>'
+            f'<span class="rate-c rate-c-ref">{pct(r["tot"])}</span>'
             f'</div>'
         )
 
@@ -2964,7 +3027,8 @@ def build_rate_table_html(rows, all_row, mode):
         f'<span class="rate-c rate-c-p" style="color:{HM_RATE_COLOR["◎"]}">◎</span>'
         f'<span class="rate-c rate-c-p" style="color:{HM_RATE_COLOR["○"]}">○</span>'
         f'<span class="rate-c rate-c-p" style="color:{HM_RATE_COLOR["△"]}">△</span>'
-        '<span class="rate-c rate-c-tot">合計</span>'
+        '<span class="rate-c rate-c-hi">高設定<br>◎○計</span>'
+        '<span class="rate-c rate-c-ref">参考<br>◎○△計</span>'
         '</div>'
     )
     body = one(all_row, "rate-row-all") + "".join(one(r) for r in rows)
@@ -2989,7 +3053,7 @@ def render_rate_page(store_key):
         '<span class="pd-head-label">RATE</span>'
         f'<span class="pd-head-no">{label}</span>'
         '</div>'
-        '<div class="pd-model">高設定投入率（◎○△の評価からの推定）</div>'
+        '<div class="pd-model">高設定投入率（◎○＝設定5以上相当の評価からの推定）</div>'
         '<div class="store-switch" translate="no" style="margin-top:12px;">'
         + pill("tower", STORE_NAME, "?page=rate")
         + pill("toyohira", TOYOHIRA_LABEL, "?page=rate&store=toyohira")
@@ -3023,26 +3087,62 @@ def render_rate_page(store_key):
             period_name = st.selectbox("期間", period_names, index=1, key=f"rate_period_{store_key}")
     period = dict(RATE_PERIODS)[period_name]
 
-    result = rate_summarize(df, mode, machine, period)
-    if not result[0]:
+    day_digit = None
+    if mode == "numend":
+        digit_opts = ["全日"] + [f"{k}の日" for k in range(10)]
+        today_d = rate_today_digit()
+        pick = st.selectbox(
+            "日の末尾（初期値は今日）", digit_opts, index=today_d + 1,
+            key=f"rate_digit_{store_key}",
+        )
+        if pick != "全日":
+            day_digit = int(pick[0])
+
+    day_type = "all"
+    has_events = df["イベント種別"].fillna("").astype(str).str.strip().ne("").any()
+    if has_events:
+        type_names = dict(RATE_DAY_TYPES)
+        day_type = st.radio(
+            "営業日", [t[0] for t in RATE_DAY_TYPES], format_func=lambda k: type_names[k],
+            horizontal=True, key=f"rate_daytype_{store_key}",
+        )
+
+    rows, days, n, all_row, excluded = rate_summarize(
+        df, mode, machine, period, day_type, day_digit
+    )
+    if not rows:
         st.markdown(
-            '<div class="rate-note">この条件に当てはまる評価データがありません。</div>',
+            '<div class="rate-note">この条件に当てはまるデータがありません。</div>',
             unsafe_allow_html=True,
         )
         return
-    rows, days, n, all_row = result
 
     st.markdown(
         f'<div class="rate-sum">集計対象 {days}日分・のべ{n}台（{machine if mode != "machine" else "全機種"}）</div>',
         unsafe_allow_html=True,
     )
-    st.markdown(build_rate_table_html(rows, all_row, mode), unsafe_allow_html=True)
+
+    # 台番号末尾 × 日の末尾：末尾が一致する台が全体よりどれだけ高いかを一言で出す
+    if mode == "numend" and day_digit is not None:
+        hit = [r for r in rows if int(r["order"]) == day_digit]
+        if hit:
+            diff = hit[0]["hi"] - all_row["hi"]
+            sign = "+" if diff >= 0 else "-"
+            st.markdown(
+                f'<div class="rate-find">{day_digit}の日は、台番号末尾{day_digit}の台の高設定計が '
+                f'{hit[0]["hi"]:.1f}%（その日全体 {all_row["hi"]:.1f}%、差 {sign}{abs(diff):.1f}pt）</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown(build_rate_table_html(rows, all_row, mode, day_digit), unsafe_allow_html=True)
 
     notes = [
-        "投入率は、評価が入っている台のうち◎○△だった台の割合です（×・－は高設定ではない扱い）。",
+        "◎=設定6相当、○=設定5相当、△=設定4・3相当の合成確率です。高設定計は◎+○（設定5以上相当）です。",
+        "投入率は、その日の全台のうち該当評価だった台の割合です（評価が空の台・×・－は高設定ではない扱い）。",
         "評価は合成確率などからの推定で、実際の設定投入率そのものではありません。",
-        "評価が空の日・台は集計から除いています。",
     ]
+    if excluded:
+        notes.append(f"台数が通常より大きく少ない日（{excluded}日分。過去に◎○△の台だけを記録していた期間など）は、分母が分からないため除外しています。")
     if any(r["days"] < RATE_SAMPLE_MIN_DAYS for r in rows) and mode != "day":
         notes.append(f"※は集計日数が{RATE_SAMPLE_MIN_DAYS}日未満で、参考値です。")
     st.markdown(
